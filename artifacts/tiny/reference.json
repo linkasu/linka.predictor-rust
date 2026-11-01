@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "engine": "KenLM query",
+  "host": "book.local",
+  "log_base": 10,
+  "includes_bos_context": true,
+  "includes_eos_score": true,
+  "arpa_sha256": "917214c67c4a05d79158b0c5c8d4f9255ad04bf390c82a21936eae8c1f6bd161",
+  "train_sha256": "26d6be50803f7f213a43e84ac1edd7bad436cf3881380e22b33ff14b99a7c700",
+  "query_sha256": "1ded4034d644c140b4326061243ceeb2b3a523a556ee9ab3491bfe6c3628909f",
+  "query_stdout_sha256": "a69af9bc16b5beabc3f30288ff2593dd05750cee3d37a55cf64605d830f87287",
+  "suggested_absolute_tolerance": 0.00001,
+  "cases": [
+    {"text": "я хочу чай", "token_log10_including_eos": [-0.64659816, -0.5164516, -0.8534394, -0.088724256], "total_log10": -2.1052132, "oov": 0},
+    {"text": "я хочу пить", "token_log10_including_eos": [-0.64659816, -0.5164516, -0.90663356, -0.314016], "total_log10": -2.3836994, "oov": 0},
+    {"text": "мне нужна помощь", "token_log10_including_eos": [-1.1212909, -0.95550746, -0.5911766, -0.20595309], "total_log10": -2.873928, "oov": 0},
+    {"text": "дай мне книгу", "token_log10_including_eos": [-1.5912073, -0.26328376, -0.8957514, -0.16964354], "total_log10": -2.919886, "oov": 0},
+    {"text": "я читаю суп", "token_log10_including_eos": [-0.64659816, -0.9035767, -1.6694275, -0.43196398], "total_log10": -3.6515663, "oov": 0},
+    {"text": "несуществующееслово", "token_log10_including_eos": [-2.3642452, -0.77859855], "total_log10": -3.1428437, "oov": 1},
+    {"text": "я несуществующееслово чай", "token_log10_including_eos": [-0.64659816, -2.532072, -1.0943465, -0.13671316], "total_log10": -4.40973, "oov": 1},
+    {"text": "", "token_log10_including_eos": [-1.0429738], "total_log10": -1.0429738, "oov": 0},
+    {"text": "чай", "token_log10_including_eos": [-1.3587217, -0.13671316], "total_log10": -1.4954349, "oov": 0}
+  ]
+}

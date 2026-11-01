@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "note": "Exact public file allowlist. This manifest lists itself with null size/hash to avoid a circular digest; the git commit identifies it. Original checkpoint identities and intentional differences are in reproduction.json.",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "bytes": 480,
+      "sha256": "81c1b5a7e009f1b7dc24b8e401957673d4f1c3561fe6dd3bd464a5d91f69e20d"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 48,
+      "sha256": "9762d68f2807844070a61c27453dc915b28a5352623524ce3f9096470a6ff570"
+    },
+    {
+      "path": "Cargo.lock",
+      "bytes": 15387,
+      "sha256": "c6be09603323601d5b4859dc9783fe64e447bd29a854e1085a66ce01a053ef88"
+    },
+    {
+      "path": "Cargo.toml",
+      "bytes": 139,
+      "sha256": "c8fcefb7c0f0810e01a1327181f75ef36972c8ed18432be6f54871261fb4cd8c"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "README.md",
+      "bytes": 6808,
+      "sha256": "5c810b89e61a797106b59ba6f47575fe90acee4f5512f78b432a9f5f8fd9f88c"
+    },
+    {
+      "path": "artifacts/tiny/README.md",
+      "bytes": 952,
+      "sha256": "1182521dd82dee0529d19658a571577c20601ff1bf168a5cbd8c0af514266a57"
+    },
+    {
+      "path": "artifacts/tiny/model.arpa",
+      "bytes": 9143,
+      "sha256": "917214c67c4a05d79158b0c5c8d4f9255ad04bf390c82a21936eae8c1f6bd161"
+    },
+    {
+      "path": "artifacts/tiny/query.stdout",
+      "bytes": 1043,
+      "sha256": "a69af9bc16b5beabc3f30288ff2593dd05750cee3d37a55cf64605d830f87287"
+    },
+    {
+      "path": "artifacts/tiny/query.txt",
+      "bytes": 213,
+      "sha256": "1ded4034d644c140b4326061243ceeb2b3a523a556ee9ab3491bfe6c3628909f"
+    },
+    {
+      "path": "artifacts/tiny/reference.json",
+      "bytes": 1902,
+      "sha256": "20b4b988908c3b0b209f44eb64671870aa4291050f6bcbb51ca57168c260e681"
+    },
+    {
+      "path": "artifacts/tiny/runtime-v1.lpk",
+      "bytes": 14450,
+      "sha256": "8b2100b4ee38a759fcec9f892124d4223a4dc09a742f309ade0601b9558ae49f"
+    },
+    {
+      "path": "artifacts/tiny/train.txt",
+      "bytes": 1172,
+      "sha256": "26d6be50803f7f213a43e84ac1edd7bad436cf3881380e22b33ff14b99a7c700"
+    },
+    {
+      "path": "configs/qualification-inputs.json",
+      "bytes": 1112,
+      "sha256": "a2c155c09f1409ea7260d53e80563f7b8f097b30a260b85a5ac9dd96b723792e"
+    },
+    {
+      "path": "crates/predictor-cli/Cargo.toml",
+      "bytes": 524,
+      "sha256": "200eb6a039677ab72dc797050fc0c5b00c8520e9ec03da26560b7a26edafc006"
+    },
+    {
+      "path": "crates/predictor-cli/examples/aac_journeys.rs",
+      "bytes": 34258,
+      "sha256": "74da4dd0996ecba05e1983f0842722040349196a7d49f203582a1d7b2a66dde9"
+    },
+    {
+      "path": "crates/predictor-cli/examples/baseline_bundle.rs",
+      "bytes": 3774,
+      "sha256": "39aaa3a95b66ce3cbee3ac5ebef42a782bc0edc8afebd7c69e7bddaa30c45523"
+    },
+    {
+      "path": "crates/predictor-cli/examples/perf_probe.rs",
+      "bytes": 1603,
+      "sha256": "b73f848b672160a82b61e13417a99afe6e27c73f88c2cdfe2cc76e0d46700708"
+    },
+    {
+      "path": "crates/predictor-cli/src/client.rs",
+      "bytes": 1743,
+      "sha256": "3484683f56b4f1b0ffe0bf1149f996044d29a86d2c3b9ece98b91497340c7d71"
+    },
+    {
+      "path": "crates/predictor-cli/src/diagnostics.rs",
+      "bytes": 14950,
+      "sha256": "25bf6a1e039ba0b889a077526155a23c82ac658c7fe87594de251b18f69f5ad0"
+    },
+    {
+      "path": "crates/predictor-cli/src/evaluate.rs",
+      "bytes": 30134,
+      "sha256": "87b30a6b982a12726c9865a18ff17866d5535fe1eb11626500c9303ae78626cb"
+    },
+    {
+      "path": "crates/predictor-cli/src/lexicon.rs",
+      "bytes": 3926,
+      "sha256": "ed1066c464fe248374778e001ea007b9c29c2ebfc8559ca958c687e1d9cb38e5"
+    },
+    {
+      "path": "crates/predictor-cli/src/lib.rs",
+      "bytes": 107,
+      "sha256": "a70509fc90da0a6baa87ba6bb2f87925a16886beec9381ddffa68f82a858ca94"
+    },
+    {
+      "path": "crates/predictor-cli/src/main.rs",
+      "bytes": 11849,
+      "sha256": "6cf6fcb7f80601264c446d3b6c0d75b03391f7ce3508cfa23e4cc05166bf6d26"
+    },
+    {
+      "path": "crates/predictor-cli/src/pipeline.rs",
+      "bytes": 34394,
+      "sha256": "b5eff2e5d9dc70736af21341ad187153c23364c6db501d7b7920adc5c5061639"
+    },
+    {
+      "path": "crates/predictor-cli/src/prepare.rs",
+      "bytes": 16289,
+      "sha256": "e7afefa54f64ff27befe12b6c17965a2ed0f5a9f99b2ee4441259fd5fc8a35d8"
+    },
+    {
+      "path": "crates/predictor-cli/tests/actions.rs",
+      "bytes": 1691,
+      "sha256": "b1c41802bb2ffef0d23148478a13c743b599dec05848a3c8c292f53a6502fe16"
+    },
+    {
+      "path": "crates/predictor-cli/tests/book_orphan.rs",
+      "bytes": 6715,
+      "sha256": "a5189b3fc649d246ab6dfd17f5128f385f3bb746c2dcb753f5b3008e175085af"
+    },
+    {
+      "path": "crates/predictor-cli/tests/budget.rs",
+      "bytes": 6189,
+      "sha256": "e994259591cac5f581be785e25ca0872769ac955dc1bb8c88229669edd6d2f30"
+    },
+    {
+      "path": "crates/predictor-cli/tests/checkpoint.rs",
+      "bytes": 14705,
+      "sha256": "180f8d66a2435301d14baa39b9e1af3d9ae3ada3722c83b95ebef2769776bc5e"
+    },
+    {
+      "path": "crates/predictor-cli/tests/diagnostics.rs",
+      "bytes": 5106,
+      "sha256": "33e307bb435c359ff07402eac242dc6470b836baf954ebdfb58af5367baf686d"
+    },
+    {
+      "path": "crates/predictor-cli/tests/evaluate_command.rs",
+      "bytes": 5074,
+      "sha256": "f180f8db4fb49cf4faedfbd3e075b80a236cb04ec5c072cdc277284a253bb9e0"
+    },
+    {
+      "path": "crates/predictor-cli/tests/grouped_evaluation.rs",
+      "bytes": 20697,
+      "sha256": "04bce6467642b99312660de36473188eda4bf49c707eb43d10c01f2f65eb442c"
+    },
+    {
+      "path": "crates/predictor-cli/tests/lexicon.rs",
+      "bytes": 2274,
+      "sha256": "9698194cf7345d4e3a4454b20a0735923ebbeb1a19a61cd4c8f5e9f73ca5a100"
+    },
+    {
+      "path": "crates/predictor-cli/tests/prepare.rs",
+      "bytes": 7887,
+      "sha256": "ab4934ef4d0e8b4a21a8a1195628a8a532a3afd7a597af0e8c4306f6b785ffb0"
+    },
+    {
+      "path": "crates/predictor-cli/tests/privacy.rs",
+      "bytes": 4994,
+      "sha256": "3019795d5daab707c07031fdfb2f7962b96b2714d821925e035d9b1cbc455c58"
+    },
+    {
+      "path": "crates/predictor-core/Cargo.toml",
+      "bytes": 372,
+      "sha256": "758a0db2e0700517dfc84d5e8eea9813ef2bc4025a8c6a7c330c5dd93d4c59b2"
+    },
+    {
+      "path": "crates/predictor-core/src/lib.rs",
+      "bytes": 374,
+      "sha256": "1363fd083847d8638ef01510ab3c2214b4c8c5d69252b8ce87c8806ea9c9a9ca"
+    },
+    {
+      "path": "crates/predictor-core/src/model.rs",
+      "bytes": 44156,
+      "sha256": "0b9d932bf83b962e72e45cb9f7b41b6b0f3843ad7e085b70b2cf9e16347c81d7"
+    },
+    {
+      "path": "crates/predictor-core/src/personal.rs",
+      "bytes": 6126,
+      "sha256": "1be136adda6cabfc4db3b8285301b1812057e85b9becc1f6ee3ff9e9a77cfdf4"
+    },
+    {
+      "path": "crates/predictor-core/src/search.rs",
+      "bytes": 26208,
+      "sha256": "66e12260bab2bff2484b66b4fb2dabd21f997264ec0737b30ad9c0f33236618b"
+    },
+    {
+      "path": "crates/predictor-core/src/text.rs",
+      "bytes": 3744,
+      "sha256": "778545a986e99333330d5582b403d1123750a3d87cf95f4b12ec5cade9325e4f"
+    },
+    {
+      "path": "crates/predictor-core/tests/kenlm_differential.rs",
+      "bytes": 11892,
+      "sha256": "05ac3a3afbc6110557e731cb7d62e61c9c720f0ae2a4de2ee2ceedb3257671f3"
+    },
+    {
+      "path": "crates/predictor-core/tests/personal_privacy.rs",
+      "bytes": 4702,
+      "sha256": "d6911845eee50f62aa46cb8227b39e2e440ee351124f18cec05571b139cda2f1"
+    },
+    {
+      "path": "crates/predictor-core/tests/runtime.rs",
+      "bytes": 19161,
+      "sha256": "12765c7f62a8b642002ade52b184aee73ccd29632283f117d864769aeda5a2f1"
+    },
+    {
+      "path": "docs/independent-golden-cases.md",
+      "bytes": 2145,
+      "sha256": "67f9aa75554c3fe4e11b37c8e92f0abe6b73fcc4fb9a3dd1407f4653e4a4d452"
+    },
+    {
+      "path": "docs/verification.md",
+      "bytes": 2695,
+      "sha256": "ee6f4c4ab4e301c2ce8b916e523ced5f58bf12c6f6b3411f85b0dd3b31df4f75"
+    },
+    {
+      "path": "provenance/README.md",
+      "bytes": 4896,
+      "sha256": "fd9cb716d564a942c1ca60b3a6ac8bc840e2b5e7d68278e1dd305de6a49930c5"
+    },
+    {
+      "path": "provenance/dependency-licenses.json",
+      "bytes": 40140,
+      "sha256": "842879e66438617a7a246f03829de4c943d85ef89ce09ba64688bca33b4b07cd"
+    },
+    {
+      "path": "provenance/licenses/KenLM-LICENSE",
+      "bytes": 1150,
+      "sha256": "6d9f8894586896ee3b383c962e141f527edeb54f561a6bd189d0eb08380c4cc2"
+    },
+    {
+      "path": "provenance/publication-files.json",
+      "bytes": null,
+      "sha256": null
+    },
+    {
+      "path": "provenance/reproduction.json",
+      "bytes": 7792,
+      "sha256": "690aa58bec42b33be96ab4be0df2f77f3300c6a80b08305c636b0e27fb0fb4dc"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "bytes": 86,
+      "sha256": "887f9be066a15585a2c583578e84b0fcb541126d81546276bad3d2ff00d61167"
+    },
+    {
+      "path": "spec/cli.md",
+      "bytes": 16245,
+      "sha256": "328603f325450d7756433c84ea876f8dfb51fc54c5945164bdb16c8c7fdee13a"
+    },
+    {
+      "path": "spec/evaluation.md",
+      "bytes": 5041,
+      "sha256": "c689b4eecbccf57374f2f6a840ce0c137ba842fe46871245f7d2cc1fcf7b58de"
+    },
+    {
+      "path": "spec/package-v1.md",
+      "bytes": 6079,
+      "sha256": "837aa8c3727237865a6b115fb89aeb7e85347ca8dc7889331c77c9c574fada16"
+    },
+    {
+      "path": "spec/pipeline-contract.md",
+      "bytes": 3184,
+      "sha256": "99a6a61ba0c4e684cb0cebddc1abfafa700296ff7291dc6321552e4e6b97cbfc"
+    },
+    {
+      "path": "spec/runtime-api.md",
+      "bytes": 5414,
+      "sha256": "f60c0fc175506a7c34eb952a8d3518cc77b8ed2e1ff97d9ad0936fdbff6deab4"
+    },
+    {
+      "path": "spec/text-contract.md",
+      "bytes": 6578,
+      "sha256": "920343379fa2cd9a8c566282e39a1d8703ea44e27e4440ed9a5eff8248ad880b"
+    }
+  ]
+}
