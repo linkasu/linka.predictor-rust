@@ -1,6 +1,12 @@
+#[cfg(feature = "tooling")]
 pub mod client;
+#[cfg(feature = "tooling")]
 pub mod diagnostics;
+#[cfg(feature = "tooling")]
 pub mod evaluate;
+#[cfg(feature = "tooling")]
 pub mod lexicon;
+#[cfg(feature = "tooling")]
 pub mod pipeline;
+#[cfg(feature = "tooling")]
 pub mod prepare;

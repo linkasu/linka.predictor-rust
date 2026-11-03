@@ -14,3 +14,11 @@ jobs:
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: cargo test --locked --workspace --all-targets
       - run: cargo test --locked -p predictor-core --test runtime -- --ignored
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: cargo build --locked -p predictor-cli --bin lp-electron
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: packages/electron
+      - run: npm test
+        working-directory: packages/electron

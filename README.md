@@ -2,7 +2,8 @@
 
 Offline Russian end-of-text completion and correction, implemented in native Rust.
 `predictor-core` loads an immutable mmap-backed `.lpk` model; `predictor-cli`
-provides the `lp` command. No HTTP service, GUI, Electron binding or English
+provides the `lp` command. A draft [Electron main API](docs/electron-api.md) wraps
+the dedicated stdin-only `lp-electron` sidecar. No HTTP service, GUI or English
 predictor is delivered here. The CLI currently targets Unix; Windows and Android
 are not qualified. Rust 1.98.1 is pinned in `rust-toolchain.toml`.
 
@@ -64,7 +65,8 @@ fn main() -> Result<()> {
 `{text, pos, endOfWord}`. Each suggestion replaces the original **UTF-16 tail**:
 negative `pos` removes that many UTF-16 code units from the end, zero appends.
 Spaces are explicit; unaffected input is preserved. There is no mid-text cursor
-API or automatic edit application. See [runtime API](spec/runtime-api.md),
+API or automatic edit application in the core; the Electron adapter accepts a
+UTF-16 caret and preserves its suffix. See [runtime API](spec/runtime-api.md),
 [text contract](spec/text-contract.md) and [package format](spec/package-v1.md).
 Querying never learns; personal learning requires explicit confirmed events and
 an explicit separately stored profile. Applications must serialize profile writers.
@@ -101,7 +103,7 @@ Latency success is not AAC quality acceptance. Synthetic AAC journeys still show
 harmful suggestions and a confirmed name outside the top five. Wrong-choice,
 undo and repair can cost more than typing. OpenCorpora was excluded after HTTP
 403; near-duplicate/translation-family isolation is incomplete. No real-human
-AAC acceptance, English, GUI/Electron integration or cross-device latency claim
+AAC acceptance, English, packaged GUI/Electron integration or cross-device latency claim
 is made. The separate quality work is not included in this snapshot.
 
 ## Licenses and provenance
@@ -120,8 +122,8 @@ No corpus/model redistribution approval is asserted. A pinned download and
 prepare recipe is documented separately; it preserves sentence IDs/authors and
 requires independent licensing review before distributing resulting data.
 
-The [publication manifest](provenance/publication-files.json) lists every public
-file, hashes and original snapshot differences. Private histories, ledgers,
+The [publication manifest](provenance/publication-files.json) records the original
+public baseline files, hashes and snapshot differences (not later adapter additions). Private histories, ledgers,
 process logs, owner requests, credentials, personal profiles, full bundles and
 unrelated work-in-progress are deliberately excluded. CI runs fmt/clippy/tests
 with read-only repository permission, no secrets and no deployment.

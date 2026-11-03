@@ -1,0 +1,139 @@
+name: Windows runtime qualification
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Reviewed full source commit SHA (no branch names)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  runtime:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.source_sha }}
+      QUALIFICATION_MODE: ${{ github.event_name == 'pull_request' && 'pr-unreviewed' || 'manual-reviewed' }}
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/windows-runtime
+    steps:
+      - name: Validate source SHA
+        shell: pwsh
+        run: |
+          if ($env:SOURCE_SHA -cnotmatch '^[0-9a-f]{40}$') { throw 'A full source SHA is required' }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify exact checkout
+        shell: pwsh
+        run: |
+          $actual = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $actual -cne $env:SOURCE_SHA) { throw 'Checkout does not match requested source SHA' }
+      - name: Install explicit qualification toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Toolchain install failed' }
+      - name: Check, test and build runtime only
+        shell: pwsh
+        run: |
+          cargo +1.98.1 fmt --all --check
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
+          cargo +1.98.1 check --locked -p predictor-cli --no-default-features --bin lp-electron --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime check failed' }
+          cargo +1.98.1 clippy --locked -p predictor-cli --no-default-features --lib --bin lp-electron --target x86_64-pc-windows-msvc -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime clippy failed' }
+          cargo +1.98.1 test --locked -p predictor-cli --no-default-features --bin lp-electron --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Request tests failed' }
+          cargo +1.98.1 build --locked --release -p predictor-cli --no-default-features --bin lp-electron --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime build failed' }
+      - name: Record binary, toolchain, dependencies and DLL imports
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qualification | Out-Null
+          Copy-Item "$env:CARGO_TARGET_DIR/x86_64-pc-windows-msvc/release/lp-electron.exe" qualification/
+          Copy-Item LICENSE qualification/
+          Copy-Item artifacts/tiny/runtime-v1.lpk qualification/tiny-runtime-v1.lpk
+          Copy-Item artifacts/tiny/README.md qualification/tiny-NOTICE.md
+          git rev-parse HEAD | Set-Content qualification/source.txt
+          "mode=$env:QUALIFICATION_MODE; requested-source=$env:SOURCE_SHA; production-approved=false" | Add-Content qualification/source.txt
+          git rev-parse HEAD:.github/workflows/windows-runtime.yml | Add-Content qualification/source.txt
+          "executed-workflow=$env:GITHUB_WORKFLOW_REF@$env:GITHUB_WORKFLOW_SHA" | Add-Content qualification/source.txt
+          "runner=$env:ImageOS $env:ImageVersion; target=x86_64-pc-windows-msvc; features=none; crt-static=true" | Set-Content qualification/toolchain.txt
+          rustc +1.98.1 -Vv | Add-Content qualification/toolchain.txt
+          cargo +1.98.1 -V | Add-Content qualification/toolchain.txt
+          cargo +1.98.1 tree --locked -p predictor-cli --no-default-features --target x86_64-pc-windows-msvc -e normal | Set-Content qualification/dependencies.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency evidence failed' }
+          if (Select-String -Path qualification/dependencies.txt -Pattern '(bzip2|rusqlite|libc|quick-xml|libsqlite3-sys|cc) v[0-9]') {
+            throw 'Tooling/native dependencies leaked into runtime'
+          }
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          & "$vs/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+          dumpbin /dependents qualification/lp-electron.exe | Set-Content qualification/dll-imports.txt
+          if ($LASTEXITCODE -ne 0) { throw 'DLL inspection failed' }
+          if (Select-String -Path qualification/dll-imports.txt -Pattern '(?i)(VCRUNTIME|MSVCP|ucrtbase|api-ms-win-crt).*\.dll') {
+            throw 'Unexpected dynamic CRT dependency'
+          }
+          Get-FileHash qualification/lp-electron.exe, qualification/tiny-runtime-v1.lpk, Cargo.lock, .github/workflows/windows-runtime.yml -Algorithm SHA256 |
+            Format-List | Out-String | Set-Content qualification/sha256.txt
+      - name: Native stdin smoke without Rust or Node on PATH
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path qualification/lp-electron.exe).Path
+          $model = (Resolve-Path qualification/tiny-runtime-v1.lpk).Path
+          $env:PATH = "$env:SystemRoot/System32;$env:SystemRoot"
+          function Invoke-Runtime([string]$modelPath, [string]$q, [int]$expected, [int]$minimumSuggestions = 0) {
+            $info = [System.Diagnostics.ProcessStartInfo]::new($exe)
+            $info.ArgumentList.Add($modelPath)
+            $info.UseShellExecute = $false
+            $info.RedirectStandardInput = $true
+            $info.RedirectStandardOutput = $true
+            $info.RedirectStandardError = $true
+            $info.StandardInputEncoding = [System.Text.UTF8Encoding]::new($false)
+            $info.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+            $process = [System.Diagnostics.Process]::Start($info)
+            try {
+              $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+              $stderrTask = $process.StandardError.ReadToEndAsync()
+              $process.StandardInput.Write((@{q=$q;lang='ru';limit=5} | ConvertTo-Json -Compress))
+              $process.StandardInput.Close()
+              if (!$process.WaitForExit(10000)) {
+                $process.Kill()
+                $null = $process.WaitForExit(5000)
+                throw 'Runtime timed out'
+              }
+              $output = $stdoutTask.GetAwaiter().GetResult()
+              $stderr = $stderrTask.GetAwaiter().GetResult()
+              if ($process.ExitCode -ne $expected) { throw "Expected $expected, got $($process.ExitCode)" }
+              if ($expected -eq 0) {
+                $response = $output | ConvertFrom-Json
+                if ($response.text -isnot [array] -or $response.text.Count -lt $minimumSuggestions -or $response.text.Count -gt 5 -or $response.pos -gt 0 -or $response.endOfWord -isnot [bool]) {
+                  throw 'Invalid runtime response'
+                }
+              } elseif ($output -ne '' -or $stderr.Trim() -ne "predictor sidecar failed ($expected)") {
+                throw 'Failure must not disclose input or paths'
+              }
+            } finally { $process.Dispose() }
+          }
+          Invoke-Runtime $model 'я хочу ' 0 1
+          Invoke-Runtime $model '' 0
+          $ending = 'я хочу '
+          $longQuery = (' ' * (16384 - [System.Text.Encoding]::UTF8.GetByteCount($ending))) + $ending
+          if ([System.Text.Encoding]::UTF8.GetByteCount($longQuery) -ne 16384) { throw 'Invalid boundary fixture' }
+          Invoke-Runtime $model $longQuery 0 1
+          Invoke-Runtime $model ('я' * 8193) 12
+          Invoke-Runtime "$model.missing" '' 10
+          Set-Content qualification/corrupt.lpk 'not a model'
+          Invoke-Runtime (Join-Path $PWD qualification/corrupt.lpk) '' 11
+          Remove-Item qualification/corrupt.lpk
+          'PASS: native RU JSON, empty and 16384-byte valid query, UTF8 rejection, missing/corrupt model; async pipe drains; Rust/Node absent from PATH' | Set-Content qualification/smoke.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-runtime-${{ env.QUALIFICATION_MODE }}-${{ env.SOURCE_SHA }}
+          path: qualification/
+          if-no-files-found: error

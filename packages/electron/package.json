@@ -1,0 +1,17 @@
+{
+  "name": "@linkasu/predictor-electron",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Offline predictor sidecar API for Electron main",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepack": "npm run build && node --input-type=module -e \"import {copyFileSync} from 'node:fs'; copyFileSync('../../LICENSE','LICENSE')\""
+  },
+  "devDependencies": { "@types/node": "22.10.2", "typescript": "5.7.2" }
+}
