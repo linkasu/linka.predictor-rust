@@ -7,8 +7,10 @@ import hashlib
 import json
 import math
 import os
+import functools
 from pathlib import Path
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -38,20 +40,22 @@ def write_json(path, value):
     partial.replace(path)
 
 
-def run_command(logs, name, command, stdin=None, stdout=None):
+def run_command(logs, name, command, stdin=None, stdout=None, *, deadline=None, private_logs=True):
     record = {"argv": [str(x) for x in command], "state": "RUNNING", "child_reaped": False}
     receipt, error, resources = [logs / (name + suffix) for suffix in (".json", ".stderr", ".resources")]
     write_json(receipt, record)
     started = time.monotonic()
     wrapped = platform.system() == "Linux"
     argv = (["/usr/bin/time", "-v", "-o", str(resources)] if wrapped else []) + command
-    with error.open("xb") as stderr, (stdout or logs / f"{name}.stdout").open("xb") as output:
+    with (error.open("xb") if private_logs else open(os.devnull, "wb")) as stderr, (
+            (stdout or logs / f"{name}.stdout").open("xb") if stdout or private_logs
+            else open(os.devnull, "wb")) as output:
         process = subprocess.Popen(argv, stdin=stdin, stdout=output, stderr=stderr,
                                    start_new_session=True, env={**os.environ, "LC_ALL": "C"})
         record["pid"] = process.pid
         write_json(receipt, record)
         try:
-            code = process.wait()
+            code = process.wait(timeout=max(0, deadline - time.monotonic()) if deadline else None)
         except BaseException:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
@@ -69,7 +73,7 @@ def run_command(logs, name, command, stdin=None, stdout=None):
     signalled = code < 0 or (wrapped and "Command terminated by signal" in resources.read_text())
     record.update(state="UNRECONCILED" if signalled else ("COMPLETED" if code == 0 else "FAILED"),
                   code=code, child_reaped=code >= 0, elapsed_seconds=time.monotonic() - started,
-                  stderr_sha256=digest(error))
+                  stderr_sha256=digest(error) if private_logs else None)
     write_json(receipt, record)
     if signalled:
         raise InterruptedError("signalled child cannot be accepted as an optional candidate failure")
@@ -107,16 +111,31 @@ def attempt_candidate(name, bundle, operation):
     return result
 
 
-def require_approval(manifest, approval, review, review_sha256, exclusions_sha256, code_sha256):
+def require_approval(manifest, approval, review, review_sha256, exclusions_sha256, code_sha256,
+                     execution_context="github-linux"):
     source = manifest["source"]
     fields = {"schema", "status", "source_sha256", "evidence_sha256", "reviewer", "reference",
               "content_reviewed", "raw_blob_artifact_approved", "exclusions_sha256",
               "source_seal_sha256", "preparation_code_sha256", "excluded_ids_sha256",
               "review_run_id", "review_report_sha256"}
+    legacy = approval.get("status") == "approved-for-ci-training-only"
+    if not legacy:
+        fields.add("execution_context")
+    run_pattern = (r"[0-9]+:[0-9]+" if execution_context == "github-linux"
+                   else r"book:[0-9a-f]{32}:[1-9][0-9]*")
+    scope_valid = (execution_context == "github-linux" if legacy else
+                   approval.get("status") == "approved-for-filtered-training-only"
+                   and approval.get("execution_context") == execution_context)
+    if execution_context == "book-local-linux-container":
+        scope_valid = (scope_valid and approval.get("raw_blob_artifact_approved") is False
+                       and isinstance(review.get("execution"), dict)
+                       and review["execution"].get("kind") == execution_context)
     hashes = fields - {"schema", "status", "reviewer", "reference", "content_reviewed",
-                       "raw_blob_artifact_approved", "review_run_id"}
+                        "execution_context",
+                        "raw_blob_artifact_approved", "review_run_id"}
     if (set(approval) != fields or approval.get("schema") != "linka-model-content-review-v1"
-            or approval.get("status") != "approved-for-ci-training-only"
+            or execution_context not in {"github-linux", "book-local-linux-container"}
+            or not scope_valid
             or approval.get("source_sha256") != source["sha256"]
             or approval.get("evidence_sha256") != source["evidence_sha256"]
             or approval.get("content_reviewed") is not True
@@ -124,8 +143,7 @@ def require_approval(manifest, approval, review, review_sha256, exclusions_sha25
             or any(not isinstance(approval.get(key), str) or len(approval[key]) != 64
                    or any(c not in "0123456789abcdef" for c in approval[key]) for key in hashes)
             or not isinstance(approval.get("review_run_id"), str)
-            or len(approval["review_run_id"].split(":")) != 2
-            or not all(part.isdigit() for part in approval["review_run_id"].split(":"))
+            or re.fullmatch(run_pattern, approval["review_run_id"]) is None
             or review.get("schema") != "linka-model-review-v1" or review.get("state") != "COMPLETED"
             or review.get("mode") != "review" or review.get("source_sha256") != source["sha256"]
             or review.get("exclusions_sha256") != exclusions_sha256
@@ -145,6 +163,13 @@ def archive_approved_source(raw, archive, approved, binding):
     archive.mkdir()
     shutil.copyfile(raw, archive / "source.tsv.bz2")
     write_json(archive / "approval-binding.json", binding)
+
+
+def defer_core_dev(output):
+    # The old phrase-mean diagnostic is not the canonical, separately frozen UI DEV gate.
+    write_json(output, {"schema": "linka-core-dev-diagnostic-v1", "state": "NOT_RUN",
+                        "canonical_ui_dev_required": True,
+                        "reason": "UI_KSR_V1 DEV selection is required separately; no core diagnostic quality claim"})
 
 
 def unigram_arpa(frequencies, train, output):
@@ -186,7 +211,7 @@ def canonical_hash(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def read_json(path):
+def parse_json(content):
     def unique(pairs):
         result = {}
         for key, value in pairs:
@@ -194,9 +219,13 @@ def read_json(path):
                 raise ValueError("duplicate metadata JSON key")
             result[key] = value
         return result
+    return json.loads(content, object_pairs_hook=unique)
+
+
+def read_json(path):
     if path.stat().st_size > 16 * 1024**2:
         raise ValueError("metadata JSON exceeds 16 MiB")
-    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
+    return parse_json(path.read_text(encoding="utf-8"))
 
 
 def candidate_provenance(bundle, metadata):
@@ -246,13 +275,23 @@ def preparation_code_hash():
              "crates/predictor-cli/src/prepare/exclusions.rs", "crates/predictor-cli/src/pipeline.rs",
              "crates/predictor-core/src/text.rs", "crates/predictor-cli/examples/prepare_source.rs",
              "crates/predictor-cli/examples/make_eval_exclusions.rs",
-             "scripts/model_recipe.py", ".github/workflows/model-candidates.yml"]
+              "scripts/model_recipe.py", ".github/workflows/model-candidates.yml"]
+    paths += [name for name in ("scripts/book_model.py",)
+              if Path(name).is_file()]
     return canonical_hash({name: digest(Path(name)) for name in paths})
 
 
 def recipe(args):
     if platform.system() != "Linux" or os.environ.get("GITHUB_ACTIONS") != "true":
         raise ValueError("full preparation/training is restricted to the manual Linux CI job")
+    return _linux_recipe(args, os.environ["GITHUB_RUN_ID"] + ":" + os.environ["GITHUB_RUN_ATTEMPT"])
+
+
+def _linux_recipe(args, run_id, execution=None):
+    """Shared implementation; entry points must validate their execution boundary first."""
+    execution_context = execution["kind"] if execution else "github-linux"
+    command = functools.partial(run_command, deadline=time.monotonic() + 45 * 60,
+                                private_logs=execution is None)
     paths = [args.manifest, args.exclusion_file]
     if args.mode == "train":
         if args.approval is None or args.review_report is None:
@@ -270,7 +309,6 @@ def recipe(args):
     if manifest["kenlm"]["commit"] != KENLM_COMMIT:
         raise ValueError("unreviewed KenLM pin")
     subprocess.run(["git", "diff", "--exit-code", "HEAD"], check=True)
-    run_id = os.environ["GITHUB_RUN_ID"] + ":" + os.environ["GITHUB_RUN_ATTEMPT"]
     code_sha = preparation_code_hash()
     exclusions_sha = digest(args.exclusion_file)
     args.output.mkdir()  # New owned root only; no automatic resume/retry.
@@ -281,7 +319,8 @@ def recipe(args):
     try:
         if args.mode == "train":
             approval, review = read_json(args.approval), read_json(args.review_report)
-            require_approval(manifest, approval, review, digest(args.review_report), exclusions_sha, code_sha)
+            require_approval(manifest, approval, review, digest(args.review_report), exclusions_sha, code_sha,
+                             execution_context)
         private = args.output / "private"
         private.mkdir(mode=0o700)
         raw = private / "source.tsv.bz2"
@@ -305,10 +344,10 @@ def recipe(args):
                 "state": "APPROVED_FOR_OWNED_CI_ARTIFACT", "source_sha256": source["sha256"],
                 "review_run_id": review["review_run_id"], "review_report_sha256": digest(args.review_report),
                 "approval_sha256": digest(args.approval), "archive_run_id": run_id})
-        run_command(logs, "build-preparer", ["cargo", "build", "--locked", "--release", "-j", "2",
+        command(logs, "build-preparer", ["cargo", "build", "--locked", "--release", "-j", "2",
                                              "-p", "predictor-cli", "--example", "prepare_source"])
         prepared = private / "prepared"
-        run_command(logs, "prepare", ["target/release/examples/prepare_source", args.mode,
+        command(logs, "prepare", ["target/release/examples/prepare_source", args.mode,
                     str(args.manifest), str(raw), str(prepared), str(args.exclusion_file)])
         report = read_json(prepared / "report.json")
         if (report["grouping_version"] != "duplicate-original-components-v1"
@@ -341,6 +380,8 @@ def recipe(args):
                     "Source train/DEV shingle overlap is not measured; only exclusion-index matches are blocked",
                     "No source text, raw blob, ARPA, model, independent FINAL or automatic approval uploaded"],
             }
+            if execution:
+                review["execution"] = execution
             write_json(review_dir / "review.json", review)
         else:
             if (excluded_sha != approval["excluded_ids_sha256"]
@@ -349,7 +390,7 @@ def recipe(args):
                 raise ValueError("review/preparation exclusions mismatch or empty train/DEV")
             bundle = args.output / "bundle"
             bundle.mkdir()
-            run_command(logs, "build-cli", ["cargo", "build", "--locked", "--release", "-j", "2",
+            command(logs, "build-cli", ["cargo", "build", "--locked", "--release", "-j", "2",
                                              "-p", "predictor-cli", "--bin", "lp"])
             lp = Path("target/release/lp").resolve()
             train, frequencies = prepared / "train.txt", prepared / "frequencies.tsv"
@@ -357,11 +398,10 @@ def recipe(args):
 
             def compile_dev(name, arpa):
                 model = private / f"{name}.lpk"
-                run_command(logs, f"compile-{name}", [str(lp), "compile", str(arpa), str(model), str(frequencies), "-"])
+                command(logs, f"compile-{name}", [str(lp), "compile", str(arpa), str(model), str(frequencies), "-"])
                 if model.stat().st_size > MODEL_LIMIT:
                     raise CandidateFailure(1, "model-exceeds-128-MiB")
-                run_command(logs, f"dev-{name}", [str(lp), "evaluate", str(model), str(prepared / "dev.txt"),
-                                                 str(private / f"{name}.dev.json"), "250"])
+                defer_core_dev(private / f"{name}.dev.json")
                 arpas[name] = digest(arpa)
                 return model
 
@@ -374,18 +414,19 @@ def recipe(args):
             shutil.copyfile(private / "U.dev.json", bundle / "U.dev.json")
 
             def build_t():
-                run_command(logs, "kenlm-pin", ["git", "-C", str(args.kenlm_source), "rev-parse", "HEAD"])
-                if (logs / "kenlm-pin.stdout").read_text().strip() != KENLM_COMMIT:
+                pin = private / "kenlm-pin.stdout"
+                command(logs, "kenlm-pin", ["git", "-C", str(args.kenlm_source), "rev-parse", "HEAD"], stdout=pin)
+                if pin.read_text().strip() != KENLM_COMMIT:
                     raise CandidateFailure(1, "kenlm-checkout-pin-mismatch")
-                run_command(logs, "kenlm-clean", ["git", "-C", str(args.kenlm_source), "diff", "--exit-code", "HEAD"])
-                run_command(logs, "kenlm-configure", ["cmake", "-S", str(args.kenlm_source), "-B", str(private / "kenlm"),
+                command(logs, "kenlm-clean", ["git", "-C", str(args.kenlm_source), "diff", "--exit-code", "HEAD"])
+                command(logs, "kenlm-configure", ["cmake", "-S", str(args.kenlm_source), "-B", str(private / "kenlm"),
                                                      "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"])
-                run_command(logs, "kenlm-build", ["cmake", "--build", str(private / "kenlm"), "--target", "lmplz", "-j", "2"])
+                command(logs, "kenlm-build", ["cmake", "--build", str(private / "kenlm"), "--target", "lmplz", "-j", "2"])
                 arpa = private / "T.arpa"
                 temporary = private / "sort"
                 temporary.mkdir()
                 with train.open("rb") as text:
-                    run_command(logs, "mkn3", [str(private / "kenlm/bin/lmplz"), "-o", "3", "-S", "2G", "-T", str(temporary)],
+                    command(logs, "mkn3", [str(private / "kenlm/bin/lmplz"), "-o", "3", "-S", "2G", "-T", str(temporary)],
                                 stdin=text, stdout=arpa)
                 return compile_dev("T", arpa)
 
@@ -418,7 +459,7 @@ def recipe(args):
                 "lmplz_sha256": digest(lmplz) if lmplz.is_file() else None, "arpa_sha256": arpas,
                 "python_version": sys.version, "platform": platform.platform(),
                 "quality_approved": False, "redistribution_approved": False, "final_evaluated": False,
-                "semantic_translation_isolation": False}))
+                "semantic_translation_isolation": False, **({"execution": execution} if execution else {})}))
         for receipt in logs.glob("*.json"):
             if receipt.name != "recipe.json" and read_json(receipt)["state"] in {"RUNNING", "CANCELLED", "UNRECONCILED"}:
                 raise InterruptedError("unreconciled command receipt prevents job success")
@@ -463,6 +504,11 @@ def self_test():
         receipt = json.loads((bundle / "T.receipt.json").read_text())
         assert receipt["state"] == "FAILED" and receipt["code"] == 7 and receipt["child_reaped"]
         write_json(bundle / "U.dev.json", {"synthetic": True})
+        deferred = root / "deferred-core-dev.json"
+        defer_core_dev(deferred)
+        diagnostic = read_json(deferred)
+        assert diagnostic["state"] == "NOT_RUN" and diagnostic["canonical_ui_dev_required"] is True
+        assert not ({"ksr", "quality_pass", "passed"} & set(diagnostic))
         write_json(bundle / "source-manifest.json", {"synthetic": True})
         metadata = {key: "a" * 64 for key in ("preparation_code_sha256", "source_sha256",
                     "exclusions_sha256", "train_sha256", "frequencies_sha256", "lp_sha256")}
