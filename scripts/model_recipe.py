@@ -120,7 +120,7 @@ def require_approval(manifest, approval, review, review_sha256, exclusions_sha25
             or approval.get("source_sha256") != source["sha256"]
             or approval.get("evidence_sha256") != source["evidence_sha256"]
             or approval.get("content_reviewed") is not True
-            or approval.get("raw_blob_artifact_approved") is not True
+            or type(approval.get("raw_blob_artifact_approved")) is not bool
             or any(not isinstance(approval.get(key), str) or len(approval[key]) != 64
                    or any(c not in "0123456789abcdef" for c in approval[key]) for key in hashes)
             or not isinstance(approval.get("review_run_id"), str)
@@ -137,6 +137,14 @@ def require_approval(manifest, approval, review, review_sha256, exclusions_sha25
             or any(not isinstance(approval.get(key), str) or not approval[key].strip()
                    for key in ("reviewer", "reference"))):
         raise ValueError("separate source/exclusions/run/code-bound human content approval is required")
+
+
+def archive_approved_source(raw, archive, approved, binding):
+    if not approved:
+        return
+    archive.mkdir()
+    shutil.copyfile(raw, archive / "source.tsv.bz2")
+    write_json(archive / "approval-binding.json", binding)
 
 
 def unigram_arpa(frequencies, train, output):
@@ -292,10 +300,8 @@ def recipe(args):
             raise ValueError("source hash/size mismatch before any decoding")
         partial.rename(raw)
         if args.mode == "train":
-            archive = args.output / "approved-source"
-            archive.mkdir()
-            shutil.copyfile(raw, archive / "source.tsv.bz2")
-            write_json(archive / "approval-binding.json", {
+            archive_approved_source(raw, args.output / "approved-source",
+                approval["raw_blob_artifact_approved"], {
                 "state": "APPROVED_FOR_OWNED_CI_ARTIFACT", "source_sha256": source["sha256"],
                 "review_run_id": review["review_run_id"], "review_report_sha256": digest(args.review_report),
                 "approval_sha256": digest(args.approval), "archive_run_id": run_id})
@@ -428,6 +434,21 @@ def recipe(args):
 def self_test():
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
+        raw = root / "synthetic-source.tsv.bz2"
+        raw.write_bytes(b"synthetic source only")
+        archive = root / "approved-source"
+        binding = {"state": "APPROVED_FOR_OWNED_CI_ARTIFACT"}
+        archive_approved_source(raw, archive, False, binding)
+        assert not archive.exists()
+        archive_approved_source(raw, archive, True, binding)
+        assert (archive / "source.tsv.bz2").read_bytes() == raw.read_bytes()
+        assert read_json(archive / "approval-binding.json") == binding
+        try:
+            archive_approved_source(raw, archive, True, binding)
+        except FileExistsError:
+            pass
+        else:
+            raise AssertionError("existing source archive overwritten")
         bundle, logs = root / "bundle", root / "logs"
         bundle.mkdir(); logs.mkdir()
         def build_u():
@@ -519,6 +540,8 @@ def self_test():
         "review_report_sha256": "1" * 64,
     }
     require_approval(manifest, approval, review, "1" * 64, "c" * 64, "e" * 64)
+    require_approval(manifest, {**approval, "raw_blob_artifact_approved": False}, review,
+                     "1" * 64, "c" * 64, "e" * 64)
     for invalid in [{}, {**approval, "status": "pending"},
                     {**approval, "source_sha256": "c" * 64},
                     {**approval, "content_reviewed": False},
@@ -526,7 +549,7 @@ def self_test():
                     {**approval, "exclusions_sha256": "0" * 64},
                     {**approval, "review_run_id": "other-run"},
                     {**approval, "source_seal_sha256": "0" * 64},
-                    {**approval, "raw_blob_artifact_approved": False}]:
+                    {**approval, "raw_blob_artifact_approved": "true"}]:
         try:
             require_approval(manifest, invalid, review, "1" * 64, "c" * 64, "e" * 64)
         except ValueError:

@@ -179,7 +179,7 @@ review_report_sha256: exact review.json file hash
 reviewer: nonempty responsible reviewer
 reference: nonempty human decision/evidence reference
 content_reviewed: true
-raw_blob_artifact_approved: true
+raw_blob_artifact_approved: false | true (separate permission, not required for training)
 ```
 
 No real approval file is supplied. **Only the human reviewer** may set these two
@@ -192,9 +192,13 @@ are rejected. Excluded-ID mapping hash uses compact sorted-key UTF-8 JSON
 (`json.dumps(..., sort_keys=True, separators=(",", ":"))`).
 
 **No raw upload before that decision.** Review's worker-local pinned blob is
-ephemeral. Train re-fetches and verifies identical bytes, then stages an immutable
-owned `model-approved-source-RUN-ATTEMPT` artifact bound to the approval/review.
-It is never a public release and expires after seven days. If upstream replaces
+ephemeral. Train re-fetches and verifies identical bytes. Only an explicit
+`raw_blob_artifact_approved=true` additionally stages the owned
+`model-approved-source-RUN-ATTEMPT` artifact bound to the approval/review.
+With `false`, the original corpus stays worker-local and is not uploaded; filtered
+training outputs do not grant permission to redistribute the original raw corpus.
+Actions artifacts in a public repository are not a private-data store. An approved
+archive is not a release and expires after seven days. If upstream replaces
 the weekly file before approval, fail: a new source pin/review is required, not
 silent substitution. Archive approval must not authorize private data ingestion.
 
@@ -255,9 +259,11 @@ Each command has PID, argv, code, wait/reap state, elapsed time and resource log
 Signal/cancellation handling stops only its owned process group; workflow cleanup
 stops only its exact run-specific systemd unit. Uncertain child outcome is never
 an optional failure. No automatic resume/retry. Private diagnostic stderr is
-archived only in approved **train** mode, never review. Candidate archives retain
+archived only in **train** mode with separate raw-archive approval, never review. Candidate archives retain
 U, optional successful T, receipts, DEV metrics, original credit metadata/notices,
-source/review/code/tool/model hashes and the independent source archive binding.
+source/review/code/tool/model hashes; a separate source archive binding exists only
+when its upload was explicitly approved. Without it, durable-source reproduction
+remains unresolved and is not silently declared complete.
 No FINAL data is read, generated, tuned against or evaluated here.
 
 Linux execution itself, real coverage/whole-bundle budgets, semantic/translation
