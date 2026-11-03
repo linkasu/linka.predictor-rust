@@ -1,0 +1,147 @@
+name: Manual Windows model candidate qualification (not production approval)
+on:
+  workflow_dispatch:
+    inputs:
+      model_run_id:
+        description: Exact successful model-candidates workflow run ID in this repository
+        required: true
+        type: string
+      model_artifact_id:
+        description: Exact model-candidates artifact ID belonging to that run
+        required: true
+        type: string
+      model_variant:
+        description: U.lpk or T.lpk with COMPLETED receipt from TRAIN candidate bundle (never FINAL-based selection)
+        required: true
+        type: choice
+        options: [U, T]
+      model_sha256:
+        description: Reviewed SHA256 of the selected unpacked model (128 MiB maximum)
+        required: true
+        type: string
+      runtime_run_id:
+        description: Exact successful windows-runtime run ID; W01 is 41699527926 (PR-unreviewed scope)
+        required: true
+        type: string
+      runtime_artifact_id:
+        description: Exact runtime artifact ID; W01 is 13261064047
+        required: true
+        type: string
+      exe_sha256:
+        description: Reviewed SHA256 of lp-electron.exe from the chosen runtime artifact
+        required: true
+        type: string
+      app_tooling_sha:
+        description: Exact reviewed 40-character linkasu/linka.looks-electron tooling SHA, including W02 scripts (unmerged allowed)
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: windows-model-candidate-qualification
+  cancel-in-progress: false
+jobs:
+  candidate:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: app
+    steps:
+      - name: Validate explicit immutable inputs before checkout
+        working-directory: .
+        env:
+          APP_SHA: ${{ inputs.app_tooling_sha }}
+          MODEL_HASH: ${{ inputs.model_sha256 }}
+          EXE_HASH: ${{ inputs.exe_sha256 }}
+          MODEL_RUN: ${{ inputs.model_run_id }}
+          MODEL_ARTIFACT: ${{ inputs.model_artifact_id }}
+          RUNTIME_RUN: ${{ inputs.runtime_run_id }}
+          RUNTIME_ARTIFACT: ${{ inputs.runtime_artifact_id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:APP_SHA -cnotmatch '^[0-9a-f]{40}$') { throw 'Full reviewed app tooling SHA required' }
+          foreach ($value in @($env:MODEL_HASH, $env:EXE_HASH)) {
+            if ($value -cnotmatch '^[0-9a-f]{64}$') { throw 'Exact unpacked SHA256 required' }
+          }
+          foreach ($value in @($env:MODEL_RUN, $env:MODEL_ARTIFACT, $env:RUNTIME_RUN, $env:RUNTIME_ARTIFACT)) {
+            if ($value -cnotmatch '^[1-9][0-9]*$') { throw 'Exact run/artifact ID required' }
+          }
+      - uses: actions/checkout@v4
+        with:
+          repository: linkasu/linka.looks-electron
+          ref: ${{ inputs.app_tooling_sha }}
+          path: app
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+      - name: Verify exact app checkout and pure-helper negative controls
+        env:
+          APP_SHA: ${{ inputs.app_tooling_sha }}
+        run: |
+          if ((git rev-parse HEAD) -cne $env:APP_SHA -or $LASTEXITCODE -ne 0) { throw 'App checkout mismatch' }
+          node --test scripts/ci/windows-model-benchmark.test.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Pure-helper self-tests failed' }
+      - name: Install locked JS dependencies with lifecycle scripts disabled
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Locked dependency install failed' }
+      - name: Verify origin, run, artifact membership, bounded ZIP and exact candidate hashes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL_RUN_ID: ${{ inputs.model_run_id }}
+          MODEL_ARTIFACT_ID: ${{ inputs.model_artifact_id }}
+          MODEL_VARIANT: ${{ inputs.model_variant }}
+          MODEL_SHA256: ${{ inputs.model_sha256 }}
+          RUNTIME_RUN_ID: ${{ inputs.runtime_run_id }}
+          RUNTIME_ARTIFACT_ID: ${{ inputs.runtime_artifact_id }}
+          EXE_SHA256: ${{ inputs.exe_sha256 }}
+          APP_TOOLING_SHA: ${{ inputs.app_tooling_sha }}
+        run: |
+          node scripts/ci/windows-model-benchmark.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate verification failed before execution' }
+      - name: Job Object self-check first, then actual native candidate memory cases
+        run: ./scripts/ci/windows-model-benchmark.ps1
+      - name: Explicit provisioning whitelist, then renderer and main build (not packaging)
+        env:
+          IS_TEST: "1"
+        run: |
+          node node_modules/electron/install.js
+          if ($LASTEXITCODE -ne 0) { throw 'Explicit Electron provisioning failed' }
+          npm rebuild pictures.bank-api esbuild
+          if ($LASTEXITCODE -ne 0) { throw 'Explicit JS build provisioning failed' }
+          node scripts/ci/provision-eyelog.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Hash-bound SDK provisioning failed' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'Renderer/main build failed' }
+          node scripts/ci/windows-model-benchmark.cjs --stage
+          if ($LASTEXITCODE -ne 0) { throw 'Exact candidate resource staging failed' }
+      - name: Real EyeTyping IPC to candidate sidecar to DOM, including manual input
+        timeout-minutes: 15
+        run: |
+          node scripts/ci/windows-model-benchmark.ui.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows UI candidate benchmark failed' }
+      - name: Candidate-only aggregate receipts (no model, profile, queries or FINAL)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-model-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: app/qualification/*.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: State evidence boundary, never production auto-approval
+        if: always()
+        working-directory: .
+        run: |
+          @'
+          ## Windows model candidate qualification
+          Native execution: windows-2022 only. Hardware: NOT_TESTED.
+          Scope: built-file Electron, NOT packaged/release qualification.
+          Memory: owned-sidecar private commit Job limit/peak; Electron snapshot is separate, not whole-app peak or proof for all 8GB PCs.
+          Performance workload: repeated synthetic DEV-only requests, not independent FINAL evaluation.
+          A successful job is candidate/performance evidence only; production approval remains false.
+          Missing/failed native checks are not PASS. Consult job conclusion and aggregate JSON together.
+          '@ >> $env:GITHUB_STEP_SUMMARY
