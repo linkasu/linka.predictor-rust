@@ -2,3 +2,7 @@
 /.local/
 *.private.part
 *.private.json
+node_modules/
+packages/electron/dist/
+packages/electron/*.tgz
+packages/electron/LICENSE

@@ -9,6 +9,10 @@ license.workspace = true
 name = "lp"
 path = "src/main.rs"
 
+[[bin]]
+name = "lp-electron"
+path = "src/electron.rs"
+
 [dependencies]
 predictor-core = { path = "../predictor-core" }
 serde = { version = "=1.0.228", features = ["derive"] }
