@@ -1,0 +1,273 @@
+{
+  "schema": "linka-model-review-v1",
+  "state": "COMPLETED",
+  "mode": "review",
+  "review_run_id": "41722106455:1",
+  "source_sha256": "3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76",
+  "source_manifest_sha256": "9d269cf6fa9a62f26b504d3d221b54669aa8e225d0063c919fdcfbca2285f3d2",
+  "exclusions_sha256": "108bc86e1edb16482681618d7fde502d1449f6c24e01e357ef4746cc6f0e385b",
+  "source_seal_sha256": "9221207a04707ab745af8a095d6ac716f1af6436907f35d8ed60f10b1c21c6e3",
+  "preparation_code_sha256": "3227fac257eee79e9fa4cb6e0df651d9d5a9fb77242129f0ac356b8566ece8a3",
+  "excluded_ids_sha256": "5ebc0e395f8fa8179e5f9113d4293c06f6b6e42f7d635e2711deff775a446c03",
+  "source_revision": "b653988c590dfdff3d4358b47f1438f302f50792",
+  "preparer_sha256": "6a97f39e38985abc368f7657c2310970258da3b89dcac7cba634d45b9e4f570d",
+  "tool_versions": {
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\n",
+    "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)\n"
+  },
+  "content_reviewed": false,
+  "raw_blob_uploaded": false,
+  "statistics": {
+    "source": {
+      "profile": "tatoeba-cc0",
+      "url": "https://downloads.tatoeba.org/exports/per_language/rus/rus_sentences_CC0.tsv.bz2",
+      "sha256": "3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76",
+      "bytes": 516148,
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "evidence_url": "https://tatoeba.org/en/downloads",
+      "evidence_sha256": "7182bddbe203ba3b2c1c4981f819f460d34cbaa84e716887ebdfa16471d66e93"
+    },
+    "source_filter": {
+      "exclusion_index_sha256": "108bc86e1edb16482681618d7fde502d1449f6c24e01e357ef4746cc6f0e385b",
+      "source_seal_sha256": "9221207a04707ab745af8a095d6ac716f1af6436907f35d8ed60f10b1c21c6e3",
+      "review_only": true,
+      "exact_originals": 0,
+      "near_originals": 0,
+      "privacy_originals": 24,
+      "excluded_ids": {
+        "10159438": [
+          "component-connected"
+        ],
+        "10199108": [
+          "phone-like-identifier"
+        ],
+        "10244248": [
+          "component-connected"
+        ],
+        "10244308": [
+          "component-connected"
+        ],
+        "10284173": [
+          "direct-url"
+        ],
+        "10597782": [
+          "phone-like-identifier"
+        ],
+        "11003411": [
+          "direct-url"
+        ],
+        "11030436": [
+          "component-connected"
+        ],
+        "11043490": [
+          "component-connected"
+        ],
+        "11048037": [
+          "phone-like-identifier"
+        ],
+        "11055414": [
+          "component-connected"
+        ],
+        "11079476": [
+          "direct-url"
+        ],
+        "11081820": [
+          "component-connected"
+        ],
+        "11090582": [
+          "component-connected"
+        ],
+        "11107705": [
+          "direct-url"
+        ],
+        "11112746": [
+          "component-connected"
+        ],
+        "11114574": [
+          "component-connected"
+        ],
+        "11122261": [
+          "direct-url"
+        ],
+        "11122262": [
+          "direct-url"
+        ],
+        "11167493": [
+          "component-connected"
+        ],
+        "11167497": [
+          "phone-like-identifier"
+        ],
+        "11175387": [
+          "component-connected"
+        ],
+        "11175389": [
+          "component-connected"
+        ],
+        "11199200": [
+          "component-connected"
+        ],
+        "11206731": [
+          "direct-url",
+          "phone-like-identifier"
+        ],
+        "11217250": [
+          "phone-like-identifier"
+        ],
+        "11324005": [
+          "direct-email"
+        ],
+        "11324256": [
+          "direct-url"
+        ],
+        "11397010": [
+          "component-connected"
+        ],
+        "11502208": [
+          "component-connected"
+        ],
+        "11502222": [
+          "component-connected"
+        ],
+        "11619230": [
+          "component-connected"
+        ],
+        "11669474": [
+          "component-connected"
+        ],
+        "11858081": [
+          "direct-url"
+        ],
+        "11939893": [
+          "component-connected"
+        ],
+        "12118677": [
+          "direct-url"
+        ],
+        "12203516": [
+          "direct-email"
+        ],
+        "12666192": [
+          "direct-url"
+        ],
+        "13105959": [
+          "component-connected"
+        ],
+        "13113418": [
+          "component-connected"
+        ],
+        "13113467": [
+          "component-connected"
+        ],
+        "13291242": [
+          "component-connected"
+        ],
+        "13291246": [
+          "component-connected"
+        ],
+        "13291247": [
+          "component-connected"
+        ],
+        "13308890": [
+          "component-connected"
+        ],
+        "13308967": [
+          "component-connected"
+        ],
+        "13339650": [
+          "component-connected"
+        ],
+        "13414770": [
+          "direct-url"
+        ],
+        "13424311": [
+          "component-connected"
+        ],
+        "13434640": [
+          "component-connected"
+        ],
+        "13542816": [
+          "component-connected"
+        ],
+        "13796683": [
+          "component-connected"
+        ],
+        "13799089": [
+          "phone-like-identifier"
+        ],
+        "13800246": [
+          "component-connected"
+        ],
+        "13806031": [
+          "component-connected"
+        ],
+        "13910274": [
+          "component-connected"
+        ],
+        "13985444": [
+          "direct-url"
+        ],
+        "14005240": [
+          "phone-like-identifier"
+        ],
+        "14010195": [
+          "component-connected"
+        ],
+        "2678297": [
+          "component-connected"
+        ],
+        "3121413": [
+          "component-connected"
+        ],
+        "9950662": [
+          "direct-email"
+        ],
+        "9950705": [
+          "direct-email"
+        ]
+      }
+    },
+    "input_rows": 23094,
+    "malformed": 0,
+    "non_russian": 0,
+    "missing_author": 0,
+    "reserved_markers": 0,
+    "holdout_excluded": 0,
+    "holdout_matches": 0,
+    "holdout_related_excluded": 0,
+    "holdout_original_records": 0,
+    "duplicate_records": 864,
+    "unique_families": 27046,
+    "train": 24247,
+    "dev": 1362,
+    "test": 1437,
+    "split_overlap": 0,
+    "original_overlap": 0,
+    "component_overlap": 0,
+    "grouping_version": "duplicate-original-components-v1",
+    "independent_groups": {
+      "dev": 1141,
+      "test": 1156,
+      "train": 19955
+    },
+    "family_counts": {
+      "dev": 1362,
+      "test": 1437,
+      "train": 24247
+    },
+    "dsu_reserved_bytes": 67108844,
+    "max_token_bytes": 86,
+    "oversize_tokens": 0,
+    "process_peak_rss_bytes": 28938240,
+    "split_sha256": {}
+  },
+  "limitations": [
+    "Heuristic identifiers only, not proof of perfect privacy",
+    "No semantic, clinical-record, named-person or translation-family detector",
+    "Ordinary needs/pain words are not banned; false positives and false negatives remain",
+    "Fixed token-shingle Jaccard is not semantic near-duplicate isolation",
+    "Source train/DEV shingle overlap is not measured; only exclusion-index matches are blocked",
+    "No source text, raw blob, ARPA, model, independent FINAL or automatic approval uploaded"
+  ]
+}
