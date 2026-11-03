@@ -1,0 +1,143 @@
+name: Independent UI DEV and FINAL evaluation (not production approval)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: DEV-only UI selection first; FINAL only after owner-frozen DEV report
+        required: true
+        type: choice
+        options: [dev, final]
+        default: dev
+      source_sha:
+        description: Exact reviewed predictor source SHA used by the successful candidate run
+        required: true
+      app_tooling_sha:
+        description: Exact reviewed linka.looks-electron tooling SHA
+        required: true
+      candidate_run_id:
+        description: Successful same-repository model-candidates run ID
+        required: true
+      candidate_artifact_id:
+        description: Immutable candidate artifact ID from that run
+        required: true
+      candidate_model_sha256:
+        description: DEV compared T (or U if unavailable); FINAL owner-selected model SHA256
+        required: true
+      final_seal_sha256:
+        description: Externally pinned FINAL manifest SHA256
+        required: true
+      protocol_sha256:
+        description: Canonical UI_KSR_V1 protocol SHA256
+        required: true
+      run_freeze_sha256:
+        description: DEV parameter-plan or FINAL owner freeze SHA256
+        required: true
+      sealed_bundle:
+        description: Curator-only opaque gzip-base64 bundle, max 65000 ASCII bytes; never log
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: predictor-independent-final
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # Read private inputs from the event file, NOT step env or interpolated shell text.
+      - name: Bound phase payload and verify Actions provenance, never log target text
+        id: gate
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const crypto = require('node:crypto');
+            const zlib = require('node:zlib');
+            try {
+              const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+              if (context.eventName !== 'workflow_dispatch' || process.env.GITHUB_REPOSITORY !== 'linkasu/linka.predictor-rust' || process.env.GITHUB_REF !== 'refs/heads/'+event.repository.default_branch) throw new Error();
+              const input = event.inputs;
+              core.setSecret(input.sealed_bundle);
+              const names = ['mode','source_sha','app_tooling_sha','candidate_run_id','candidate_artifact_id','candidate_model_sha256','final_seal_sha256','protocol_sha256','run_freeze_sha256','sealed_bundle'];
+              if (Object.keys(input).sort().join() !== names.sort().join()) throw new Error();
+              if (!['dev','final'].includes(input.mode)) throw new Error();
+              for (const key of ['source_sha','app_tooling_sha']) if (!/^[a-f0-9]{40}$/.test(input[key])) throw new Error();
+              for (const key of ['candidate_model_sha256','final_seal_sha256','protocol_sha256','run_freeze_sha256']) if (!/^[a-f0-9]{64}$/.test(input[key])) throw new Error();
+              for (const key of ['candidate_run_id','candidate_artifact_id']) if (!/^[1-9][0-9]{0,15}$/.test(input[key]) || !Number.isSafeInteger(Number(input[key]))) throw new Error();
+              if (typeof input.sealed_bundle !== 'string' || input.sealed_bundle.length > 65000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.sealed_bundle)) throw new Error();
+              const payload = JSON.parse(zlib.gunzipSync(Buffer.from(input.sealed_bundle,'base64'),{maxOutputLength:2097152}).toString('utf8'));
+              const fields = ['schema','dev_jsonl','manifest_json','run_freeze_json',...(input.mode === 'final' ? ['final_jsonl','dev_report_json'] : [])];
+              if (Object.keys(payload).sort().join() !== fields.sort().join() || payload.schema !== (input.mode === 'dev' ? 'linka-ui-dev-bundle-v1' : 'linka-final-bundle-v1')) throw new Error();
+              for (const key of fields) if (typeof payload[key] !== 'string' || !payload[key]) throw new Error();
+              for (const [key,pin] of [['manifest_json','final_seal_sha256'],['run_freeze_json','run_freeze_sha256']]) if (crypto.createHash('sha256').update(payload[key]).digest('hex') !== input[pin]) throw new Error();
+              const args = context.repo;
+              const {data: run} = await github.rest.actions.getWorkflowRun({...args,run_id:Number(input.candidate_run_id)});
+              const {data: candidate_workflow} = await github.rest.actions.getWorkflow({...args,workflow_id:run.workflow_id});
+              const {data: artifact} = await github.rest.actions.getArtifact({...args,artifact_id:Number(input.candidate_artifact_id)});
+              if (run.repository.full_name !== 'linkasu/linka.predictor-rust' || run.status !== 'completed' || run.conclusion !== 'success' || run.event !== 'workflow_dispatch' || run.head_sha !== input.source_sha || candidate_workflow.path !== '.github/workflows/model-candidates.yml') throw new Error();
+              if (artifact.expired || artifact.workflow_run.id !== run.id || artifact.workflow_run.head_sha !== input.source_sha || artifact.name !== 'model-candidates-'+run.id+'-'+run.run_attempt || artifact.size_in_bytes <= 0 || artifact.size_in_bytes > 300*1024*1024 || !/^sha256:[a-f0-9]{64}$/.test(artifact.digest)) throw new Error();
+              const {data: workflow} = await github.rest.repos.getContent({...args,path:'.github/workflows/model-final.yml',ref:process.env.GITHUB_WORKFLOW_SHA});
+              if (!workflow.content || workflow.encoding !== 'base64') throw new Error();
+              const executing_workflow_sha256 = crypto.createHash('sha256').update(Buffer.from(workflow.content,'base64')).digest('hex');
+              fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'eval-candidate-meta.json'),JSON.stringify({repository:'linkasu/linka.predictor-rust',run,artifact,candidate_workflow,executing_workflow_sha256}),{flag:'wx',mode:0o600});
+              const download = await github.rest.actions.downloadArtifact({...args,artifact_id:artifact.id,archive_format:'zip'});
+              const bytes = Buffer.from(download.data);
+              if (bytes.length > 300*1024*1024 || 'sha256:'+crypto.createHash('sha256').update(bytes).digest('hex') !== artifact.digest) throw new Error();
+              fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'eval-candidate.zip'),bytes,{flag:'wx',mode:0o600});
+              core.setOutput('mode',input.mode);
+            } catch {
+              core.setFailed('FINAL input/provenance validation blocked; no content logged');
+            }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: linkasu/linka.looks-electron
+          ref: ${{ inputs.app_tooling_sha }}
+          path: app
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.22.2"
+      - name: Install locked dev tooling without lifecycle scripts
+        working-directory: app
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Synthetic contract checks only
+        working-directory: source
+        run: |
+          node --test ../app/scripts/ci/predictor-evaluation*.test.mjs
+          cargo test --locked --no-default-features -p predictor-cli --example model_final_stream
+      - name: Seal, run-freeze, canonical U/T receipts and provenance checks before inference
+        run: node app/scripts/ci/predictor-evaluation-runner.mjs preflight "$GITHUB_WORKSPACE/source"
+      - name: Build reviewed raw-response transport only, never train
+        working-directory: source
+        run: |
+          RUSTFLAGS="--remap-path-prefix=$PWD=/linka/predictor" CARGO_INCREMENTAL=0 \
+            cargo +1.98.1 build --locked --no-default-features --release -p predictor-cli --example model_final_stream
+      - name: Frozen DEV comparison or owner-frozen FINAL, same real UI_KSR_V1 adapter
+        run: node app/scripts/ci/predictor-evaluation-runner.mjs run "$GITHUB_WORKSPACE/source"
+      - name: Aggregate-only evidence, including NOT QUALIFIED
+        if: always() && steps.gate.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ui-${{ steps.gate.outputs.mode }}-aggregate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/${{ steps.gate.outputs.mode }}-aggregate.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Remove only this evaluation's private transport files
+        if: always()
+        shell: python
+        run: |
+          import os,pathlib,shutil
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          for name in ('eval-candidate-meta.json','eval-candidate.zip'):
+              (root/name).unlink(missing_ok=True)
+          for child in root.glob('ui-eval-*'):
+              if child.is_dir() and not child.is_symlink():
+                  shutil.rmtree(child)
