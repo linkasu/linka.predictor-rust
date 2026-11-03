@@ -3,6 +3,33 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  eval-transport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Build pinned private evaluation transport without loading any model or targets
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          rustup toolchain install 1.98.1 --profile minimal
+          RUSTFLAGS="--remap-path-prefix=$PWD=/linka/predictor" cargo +1.98.1 build --locked --release --no-default-features -p predictor-cli --example model_final_stream
+          mkdir eval-transport
+          cp target/release/examples/model_final_stream eval-transport/
+          sha256sum eval-transport/model_final_stream > eval-transport/sha256.txt
+          printf '%s\n' "$SOURCE_SHA" 'scope=test-only; production-approved=false; model-or-target-inputs=none' > eval-transport/source.txt
+          rustc +1.98.1 -Vv > eval-transport/toolchain.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-transport-${{ env.SOURCE_SHA }}
+          path: eval-transport/
+          if-no-files-found: error
   check:
     runs-on: ubuntu-latest
     steps:
