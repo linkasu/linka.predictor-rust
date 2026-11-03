@@ -14,6 +14,22 @@ required-features = ["tooling"]
 name = "lp-electron"
 path = "src/electron.rs"
 
+[[example]]
+name = "prepare_source"
+required-features = ["tooling"]
+
+[[example]]
+name = "make_eval_exclusions"
+required-features = ["tooling"]
+
+[[example]]
+name = "aac_journeys"
+required-features = ["tooling"]
+
+[[example]]
+name = "baseline_bundle"
+required-features = ["tooling"]
+
 [features]
 default = ["tooling"]
 tooling = ["dep:sha2", "dep:unicode-segmentation", "dep:bzip2", "dep:rusqlite", "dep:libc", "dep:quick-xml"]
