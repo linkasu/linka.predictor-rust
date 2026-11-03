@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "status": "source-provenance-reviewed-content-pending-not-approved-for-training-or-redistribution",
+  "source_provenance_review": "Primary explicitly accepted the first-party CC0 export path and pinned compressed bytes; this is not a content/archive/training decision",
+  "observed_at": "2026-11-03T18:39:19.972189+00:00",
+  "source": {
+    "profile": "tatoeba-cc0",
+    "url": "https://downloads.tatoeba.org/exports/per_language/rus/rus_sentences_CC0.tsv.bz2",
+    "sha256": "3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76",
+    "bytes": 516148,
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "evidence_url": "https://tatoeba.org/en/downloads",
+    "evidence_sha256": "7182bddbe203ba3b2c1c4981f819f460d34cbaa84e716887ebdfa16471d66e93"
+  },
+  "http": {
+    "last_modified": "Sat, 31 Oct 2026 06:41:23 GMT",
+    "etag": "\"6ae58d93-7e034\"",
+    "mutable_url": true
+  },
+  "evidence": {
+    "section": "Sentences (CC0)",
+    "declared_scope": "Contains all the sentences available under CC0.",
+    "language_option": "Russian",
+    "fields": ["sentence_id", "lang", "text", "modified"],
+    "detailed_ccby_fields": ["sentence_id", "lang", "text", "author", "created", "modified"],
+    "schedule": "Every Saturday at 06:30 UTC; per-file Last-Modified is authoritative for this observation",
+    "legalcode_url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+    "collection_method": "Official downloads HTML contains the exact Russian option URL. HEAD followed by compressed-byte SHA-256 streaming with a hard 1 MiB cap. No corpus saved, decoded or inspected."
+  },
+  "review_remaining": [
+    "Primary accepted the pinned first-party CC0 declaration; it is not a third-party title/privacy warranty",
+    "Review private, identifying and sensitive content before training; public availability is not consent",
+    "Measure train/DEV independent groups and coverage; small size is not an AAC quality claim",
+    "Source train/DEV near-overlap and semantic/translation isolation remain unqualified; the hash-only evaluation exclusion screen uses fixed 4/5 token-shingle Jaccard only",
+    "Model and distribution approval are separate; this manifest grants neither"
+  ],
+  "kenlm": {
+    "repository": "https://github.com/kpu/kenlm",
+    "commit": "4cb443e60b7bf2c0ddf3c745378f76cb59e254e5",
+    "commit_url": "https://github.com/kpu/kenlm/commit/4cb443e60b7bf2c0ddf3c745378f76cb59e254e5",
+    "verified_via": "GitHub MCP get_commit and get_file_contents LICENSE",
+    "license_blob": "47d547bb38c4cbc844ac6adcae8a84e9baf8339b",
+    "license_summary": "LGPL-2.1-or-later with bundled-file exceptions; preserve upstream LICENSE, COPYING and file notices. External estimator only, not linked into runtime."
+  }
+}

@@ -497,6 +497,13 @@ pub fn compact_attribution(prepared: &Path, destination: &Path) -> Result<()> {
     if report.grouping_version != prepare::GROUPING_VERSION {
         return Err("source_old: preparation lacks duplicate/original component isolation".into());
     }
+    let profile = report
+        .source
+        .as_ref()
+        .map_or(prepare::SourceProfile::TatoebaDetailedCcBy2Fr, |source| {
+            source.profile
+        });
+    let (license, license_url, _, _) = profile.terms();
     let connection = rusqlite::Connection::open_with_flags(
         prepared.join("families.sqlite"),
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -514,7 +521,7 @@ pub fn compact_attribution(prepared: &Path, destination: &Path) -> Result<()> {
         &mut output,
         &serde_json::json!({
             "format":"linka-compact-attribution-jsonl-v1","grouping_version":prepare::GROUPING_VERSION,
-            "source_ref":0,"sources":[{"id":"tatoeba","sentence_url_template":"https://tatoeba.org/en/sentences/show/{sentence_id}","license":"CC-BY-2.0-FR","license_url":"https://creativecommons.org/licenses/by/2.0/fr/"}],
+            "source_ref":0,"sources":[{"id":"tatoeba","sentence_url_template":"https://tatoeba.org/en/sentences/show/{sentence_id}","license":license,"license_url":license_url}],
             "fields":["sentence_id","author","segment","family_ref","component_ref"],"records":count,
             "family_reference":"1-based binary-ordered normalized-family label in the bound audit",
             "component_reference":"1-based SHA256-ordered component label in the bound audit",
@@ -530,7 +537,11 @@ pub fn compact_attribution(prepared: &Path, destination: &Path) -> Result<()> {
             &mut output,
             &serde_json::json!([
                 row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
+                if profile == prepare::SourceProfile::TatoebaCc0 {
+                    None
+                } else {
+                    Some(row.get::<_, String>(1)?)
+                },
                 row.get::<_, i64>(2)?,
                 row.get::<_, i64>(3)?,
                 row.get::<_, i64>(4)?
