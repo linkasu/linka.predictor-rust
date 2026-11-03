@@ -106,6 +106,27 @@ test('stdin not argv; structured errors for spawn/crash/protocol/output bound', 
   await missing.dispose();
 });
 
+test('RU UTF8 prefix bound is checked before spawning; EN remains manual', async () => {
+  const p = new Predictor({ executablePath: '/no/such/lp-electron', modelPath: model });
+  try {
+    for (const text of ['я'.repeat(8192) + 'я', '😀'.repeat(4096) + '😀']) {
+      const state = p.state;
+      await assert.rejects(p.predict({ text, caret: text.length, language: 'ru' }), error('INVALID_INPUT'));
+      assert.equal(p.state, state);
+      assert.deepEqual((await p.predict({ text, caret: text.length, language: 'en' })).text, []);
+    }
+    for (const text of ['я'.repeat(8192), '😀'.repeat(4096)]) {
+      await assert.rejects(p.predict({ text, caret: text.length, language: 'ru' }), error('SPAWN'));
+    }
+  } finally { await p.dispose(); }
+  const echo = fake('good');
+  try {
+    const prefix = 'я'.repeat(8192);
+    const result = await echo.predict({ text: prefix + 'suffix', caret: prefix.length, language: 'ru' });
+    assert.deepEqual(result.text, [prefix]);
+  } finally { await echo.dispose(); }
+});
+
 test('cancel, stale queued requests, newest wins, disposal during inference', async () => {
   const p = fake('slow');
   const first = p.predict(input);

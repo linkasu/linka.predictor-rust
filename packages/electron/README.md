@@ -30,7 +30,7 @@ there is **no warm-latency claim**.
 From repository root:
 
 ```sh
-cargo build --locked -p predictor-cli --bin lp-electron
+cargo build --locked -p predictor-cli --no-default-features --bin lp-electron
 cd packages/electron
 npm ci
 npm test
@@ -44,3 +44,10 @@ Tarball intentionally excludes executable and model: the host app must package
 approved resources outside ASAR, preserve license/model notices, and qualify its
 own platform/signing/IPC. Local macOS tests do not qualify packaged Electron,
 Windows, Linux or another architecture.
+
+Windows x64 runtime qualification runs on PR candidates and by manual dispatch,
+as documented in `docs/electron-api.md` in the source repository. It pins Rust
+1.98.1, matching the repository, uses static CRT and records native smoke results
+and DLL imports. Candidate artifacts are not production approval; approve only
+a reviewed commit hash after successful native CI. The packaged EXE requires no user
+Rust or Node installation; the API runs inside the host Electron main process.

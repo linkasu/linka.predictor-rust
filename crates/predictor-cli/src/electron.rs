@@ -12,7 +12,7 @@ struct Input {
 
 fn parse_request(bytes: &[u8]) -> Result<Input, ()> {
     let input: Input = serde_json::from_slice(bytes).map_err(|_| ())?;
-    if input.lang != "ru" || input.limit != 5 || input.q.encode_utf16().count() > 16384 {
+    if input.lang != "ru" || input.limit != 5 || input.q.len() > 16384 {
         return Err(());
     }
     Ok(input)
@@ -65,6 +65,17 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_request_utf8_byte_bounds() {
+        for (character, count) in [("x", 16384), ("я", 8192), ("😀", 4096)] {
+            let q = character.repeat(count);
+            let request = serde_json::json!({ "q": q, "lang": "ru", "limit": 5 });
+            assert!(parse_request(&serde_json::to_vec(&request).unwrap()).is_ok());
+            let request = serde_json::json!({ "q": q + character, "lang": "ru", "limit": 5 });
+            assert!(parse_request(&serde_json::to_vec(&request).unwrap()).is_err());
+        }
+    }
 
     #[test]
     fn test_request_bounds_and_schema() {
