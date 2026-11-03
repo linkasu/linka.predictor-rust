@@ -287,9 +287,11 @@ def recipe(args):
     return _linux_recipe(args, os.environ["GITHUB_RUN_ID"] + ":" + os.environ["GITHUB_RUN_ATTEMPT"])
 
 
-def _linux_recipe(args, run_id, execution=None):
+def _linux_recipe(args, run_id, execution=None, source_cache=None):
     """Shared implementation; entry points must validate their execution boundary first."""
     execution_context = execution["kind"] if execution else "github-linux"
+    if source_cache is not None and execution_context != "book-local-linux-container":
+        raise ValueError("verified worker-local source cache is restricted to Book execution")
     command = functools.partial(run_command, deadline=time.monotonic() + 45 * 60,
                                 private_logs=execution is None)
     paths = [args.manifest, args.exclusion_file]
@@ -326,7 +328,8 @@ def _linux_recipe(args, run_id, execution=None):
         raw = private / "source.tsv.bz2"
         partial = raw.with_suffix(".part")
         size = 0
-        with urlopen(source["url"], timeout=60) as response, partial.open("xb") as output:
+        with (source_cache.open("rb") if source_cache is not None else
+              urlopen(source["url"], timeout=60)) as response, partial.open("xb") as output:
             while True:
                 block = response.read(min(65536, source["bytes"] + 1 - size))
                 if not block:
@@ -382,6 +385,8 @@ def _linux_recipe(args, run_id, execution=None):
             }
             if execution:
                 review["execution"] = execution
+            if source_cache is not None:
+                review["source_transport"] = "verified-worker-local-cache"
             write_json(review_dir / "review.json", review)
         else:
             if (excluded_sha != approval["excluded_ids_sha256"]
@@ -459,7 +464,8 @@ def _linux_recipe(args, run_id, execution=None):
                 "lmplz_sha256": digest(lmplz) if lmplz.is_file() else None, "arpa_sha256": arpas,
                 "python_version": sys.version, "platform": platform.platform(),
                 "quality_approved": False, "redistribution_approved": False, "final_evaluated": False,
-                "semantic_translation_isolation": False, **({"execution": execution} if execution else {})}))
+                "semantic_translation_isolation": False, **({"execution": execution} if execution else {}),
+                **({"source_transport": "verified-worker-local-cache"} if source_cache is not None else {})}))
         for receipt in logs.glob("*.json"):
             if receipt.name != "recipe.json" and read_json(receipt)["state"] in {"RUNNING", "CANCELLED", "UNRECONCILED"}:
                 raise InterruptedError("unreconciled command receipt prevents job success")

@@ -17,6 +17,75 @@ import model_recipe as recipe
 
 
 class BookTests(unittest.TestCase):
+    def test_worker_local_cache_requires_exact_safe_verified_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            cache_root = root / "source-cache"; cache_root.mkdir()
+            content = b"synthetic compressed bytes only"
+            sha = hashlib.sha256(content).hexdigest()
+            manifest = {"source": {"bytes": len(content), "sha256": sha}}
+            path = cache_root / f"{sha}.tsv.bz2"
+            with patch.object(book, "SOURCE_CACHE_ROOT", cache_root):
+                with self.assertRaises((OSError, ValueError)):
+                    book.validate_source_cache(path, manifest)
+                path.write_bytes(content); path.chmod(0o444)
+                book.validate_source_cache(path, manifest)
+                self.assertEqual(path.read_bytes(), content)
+                for invalid in (cache_root / "other.tsv.bz2", root / path.name):
+                    with self.assertRaises(ValueError):
+                        book.validate_source_cache(invalid, manifest)
+                path.chmod(0o644)
+                with self.assertRaises(ValueError):
+                    book.validate_source_cache(path, manifest)
+                for bad_content in (content[:-1], content + b"x", b"x" * len(content), b"x" * 516149):
+                    path.write_bytes(bad_content); path.chmod(0o444)
+                    with self.assertRaises(ValueError):
+                        book.validate_source_cache(path, manifest)
+                    path.chmod(0o644)
+                path.unlink()
+                target = root / "target"; target.write_bytes(content); target.chmod(0o444)
+                path.symlink_to(target)
+                with self.assertRaises(ValueError):
+                    book.validate_source_cache(path, manifest)
+                path.unlink(); path.mkdir()
+                with self.assertRaises(ValueError):
+                    book.validate_source_cache(path, manifest)
+                path.rmdir(); cache_root.rmdir()
+                cache_root.symlink_to(root, target_is_directory=True)
+                with self.assertRaises(ValueError):
+                    book.validate_source_cache(path, manifest)
+
+    def test_shared_cache_stream_has_same_predecode_size_hash_gate_as_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = {"profile": "tatoeba-cc0", "bytes": 516148,
+                      "sha256": "3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76",
+                      "url": "https://downloads.tatoeba.org/exports/per_language/rus/rus_sentences_CC0.tsv.bz2"}
+            manifest, exclusions, cache = root / "manifest.json", root / "index.json", root / "synthetic-cache"
+            recipe.write_json(manifest, {"source": source, "kenlm": {"commit": recipe.KENLM_COMMIT}})
+            recipe.write_json(exclusions, {"synthetic": True})
+            args = Mock(mode="review", manifest=manifest, exclusion_file=exclusions)
+            with self.assertRaises(ValueError):
+                recipe._linux_recipe(args, "123:1", source_cache=cache)
+            for use_cache in (False, True):
+                for size in (16366, 516148, 516149):
+                    args.output = root / f"output-{use_cache}-{size}"
+                    content = b"x" * size
+                    cache.write_bytes(content)
+                    with (patch.object(recipe.subprocess, "run"),
+                          patch.object(recipe, "preparation_code_hash", return_value="e" * 64),
+                          patch.object(recipe, "urlopen", return_value=io.BytesIO(content)) as network,
+                          patch.object(recipe, "run_command") as compute):
+                        with self.assertRaises(ValueError):
+                            recipe._linux_recipe(args, "book:" + "a" * 32 + ":1",
+                                {"kind": "book-local-linux-container"}, source_cache=cache if use_cache else None)
+                        compute.assert_not_called()
+                        if use_cache:
+                            network.assert_not_called()
+                    self.assertFalse((args.output / "private/source.tsv.bz2").exists())
+                    self.assertFalse((args.output / "bundle").exists())
+                    self.assertEqual(recipe.read_json(args.output / "logs/recipe.json")["state"], "FAILED")
+
     def test_cgroup_caps(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -163,18 +232,33 @@ class BookTests(unittest.TestCase):
                   patch.object(book, "record_completion") as completion):
                 book.run(args)
                 execution = {**receipt, "kind": "book-local-linux-container", "receipt_sha256": pin}
-                shared.assert_called_once_with(args, "book:" + "a" * 32 + ":1", execution)
+                shared.assert_called_once_with(args, "book:" + "a" * 32 + ":1", execution, source_cache=None)
                 completion.assert_not_called()
                 self.assertNotIn(path, [call.args[0] for call in tracked.call_args_list])
                 git_run.assert_called_once()
                 shared.reset_mock()
+                args.source_cache = Path("/work/source-cache") / (("f" * 64) + ".tsv.bz2")
+                manifest = {"source": {"sha256": "f" * 64, "bytes": 10}}
+                with (patch.object(recipe, "read_json", return_value=manifest),
+                      patch.object(book, "validate_source_cache") as cache_gate,
+                      patch.object(book, "read_receipt", return_value=receipt)):
+                    book.run(args)
+                    cache_gate.assert_called_once_with(args.source_cache, manifest)
+                    shared.assert_called_once_with(args, "book:" + "a" * 32 + ":1", execution,
+                                                   source_cache=args.source_cache)
+                    shared.reset_mock()
+                    cache_gate.side_effect = ValueError("synthetic invalid cache")
+                    with self.assertRaises(ValueError):
+                        book.run(args)
+                    shared.assert_not_called()
+                args.source_cache = None
                 args.mode = "train"
                 with self.assertRaises(ValueError):
                     book.run(args)
                 shared.assert_not_called()
                 args.approval = Path("approval.json"); args.review_report = Path("review.json")
                 book.run(args)
-                shared.assert_called_once_with(args, "book:" + "a" * 32 + ":1", execution)
+                shared.assert_called_once_with(args, "book:" + "a" * 32 + ":1", execution, source_cache=None)
                 completion.assert_called_once_with(args.output, "book:" + "a" * 32 + ":1")
                 completion.reset_mock(); shared.reset_mock()
                 shared.side_effect = InterruptedError("synthetic cancellation")
@@ -352,6 +436,8 @@ class BookTests(unittest.TestCase):
                 elif name == "kenlm-pin":
                     raise recipe.CandidateFailure(7, "synthetic-optional-T-failure")
             original_digest = recipe.digest
+            cache = root / "synthetic-cache.tsv.bz2"
+            cache.write_bytes(b"x" * source["bytes"])
             def synthetic_digest(path):
                 if path.name == "source.tsv.part":
                     return source["sha256"]
@@ -359,14 +445,16 @@ class BookTests(unittest.TestCase):
             with (patch.object(recipe.subprocess, "run"),
                   patch.object(recipe.subprocess, "check_output", return_value="synthetic-tool"),
                   patch.object(recipe, "preparation_code_hash", return_value="e" * 64),
-                  patch.object(recipe, "urlopen", return_value=io.BytesIO(b"x" * source["bytes"])),
+                  patch.object(recipe, "urlopen") as network,
                   patch.object(recipe, "digest", side_effect=synthetic_digest),
                   patch.object(recipe, "run_command", side_effect=command),
                   patch.object(recipe, "archive_approved_source") as archive):
-                recipe._linux_recipe(args, "book:" + "b" * 32 + ":1", execution)
+                recipe._linux_recipe(args, "book:" + "b" * 32 + ":1", execution, source_cache=cache)
+                network.assert_not_called()
                 archive.assert_not_called()
             review = recipe.read_json(args.output / "review/review.json")
             self.assertEqual(review["execution"], execution)
+            self.assertEqual(review["source_transport"], "verified-worker-local-cache")
             self.assertNotIn("context", review)
             self.assertFalse(review["content_reviewed"])
             self.assertEqual([name for name, _ in calls], ["build-preparer", "prepare"])
@@ -383,15 +471,17 @@ class BookTests(unittest.TestCase):
             with (patch.object(recipe.subprocess, "run"),
                   patch.object(recipe.subprocess, "check_output", return_value="synthetic-tool"),
                   patch.object(recipe, "preparation_code_hash", return_value="e" * 64),
-                  patch.object(recipe, "urlopen", return_value=io.BytesIO(b"x" * source["bytes"])),
+                  patch.object(recipe, "urlopen") as network,
                   patch.object(recipe, "digest", side_effect=synthetic_digest),
                   patch.object(recipe, "run_command", side_effect=command),
                   patch.object(recipe.platform, "platform", return_value="synthetic-linux"),
                   patch.object(recipe, "require_approval")):
-                recipe._linux_recipe(args, "book:" + "b" * 32 + ":2", execution)
+                recipe._linux_recipe(args, "book:" + "b" * 32 + ":2", execution, source_cache=cache)
+                network.assert_not_called()
             provenance = recipe.read_json(args.output / "bundle/provenance.json")
             self.assertEqual(provenance["schema"], "linka-model-candidates-v1")
             self.assertEqual(provenance["execution"], execution)
+            self.assertEqual(provenance["source_transport"], "verified-worker-local-cache")
             self.assertNotIn("context", provenance)
             self.assertEqual(recipe.read_json(args.output / "bundle/T.receipt.json")["state"], "FAILED")
             self.assertTrue((args.output / "bundle/U.lpk").is_file())

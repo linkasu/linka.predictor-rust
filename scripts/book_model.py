@@ -19,6 +19,7 @@ import model_recipe as recipe
 MAX_LIMITS = {"memory_bytes": 6 * 1024**3, "cpus": 2, "tasks": 128}
 SOURCE_ROOT = Path("/work/source")
 RECEIPT_PATH = Path("/work/metadata/execution.json")
+SOURCE_CACHE_ROOT = Path("/work/source-cache")
 
 
 def host_guard():
@@ -93,6 +94,28 @@ def tracked_file(path):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
 
+def validate_source_cache(path, manifest):
+    source = manifest["source"]
+    sha, size = source["sha256"], source["bytes"]
+    if (not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{64}", sha) is None
+            or type(size) is not int or not 0 < size <= 516148
+            or path != SOURCE_CACHE_ROOT / f"{sha}.tsv.bz2"
+            or any(parent.is_symlink() for parent in (path, *path.parents))):
+        raise ValueError("source cache must be the exact worker-local manifest-bound path")
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_mode & 0o222 or before.st_size != size:
+        raise ValueError("source cache must be read-only, regular and exactly the pinned size")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        current = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(current.st_mode) or current.st_mode & 0o222 or current.st_size != size
+                or (current.st_dev, current.st_ino) != (before.st_dev, before.st_ino)):
+            raise ValueError("source cache changed while opening")
+        content = stream.read(size + 1)
+    if len(content) != size or hashlib.sha256(content).hexdigest() != sha:
+        raise ValueError("source cache hash/size mismatch before any computation")
+
+
 def record_completion(output, run_id):
     logs, bundle = output / "logs", output / "bundle"
     final_path = logs / "recipe.json"
@@ -158,6 +181,8 @@ def run(args):
     receipt = read_receipt(args.runner_receipt, args.receipt_sha256)
     validate_receipt(receipt, args.job_id, args.attempt,
                      args.image_digest, args.source_sha, limits)
+    if args.source_cache is not None:
+        validate_source_cache(args.source_cache, recipe.read_json(args.manifest))
     if (not args.output.is_absolute() or args.output.resolve().is_relative_to(SOURCE_ROOT)
             or any(parent.is_symlink() for parent in (args.output, *args.output.parents))):
         raise ValueError("output must be a new absolute worker-local path outside source")
@@ -165,7 +190,7 @@ def run(args):
     resource.setrlimit(resource.RLIMIT_FSIZE, (1024**3, 1024**3))
     execution = {**receipt, "kind": "book-local-linux-container", "receipt_sha256": args.receipt_sha256}
     run_id = f"book:{args.job_id}:{args.attempt}"
-    result = recipe._linux_recipe(args, run_id, execution)
+    result = recipe._linux_recipe(args, run_id, execution, source_cache=args.source_cache)
     if args.mode == "train":
         record_completion(args.output, run_id)
     return result
@@ -182,6 +207,7 @@ def parser():
         result.add_argument(f"--{name}", required=True)
     result.add_argument("--attempt", type=int, required=True)
     result.add_argument("--kenlm-source", type=Path, default=Path(".local/kenlm-source"))
+    result.add_argument("--source-cache", type=Path)
     return result
 
 

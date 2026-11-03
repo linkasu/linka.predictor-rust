@@ -233,6 +233,24 @@ python3 scripts/book_model.py --mode train \
 
 Each execution needs its own explicit job/attempt, receipt/pin and unused output;
 these two examples are separate operator actions, **not an automatic sequence**.
+If the original GET stalls, primary may separately fetch only the pinned source
+into an ephemeral, worker-local read-only cache. Add this optional Book-only flag
+to either command (there is no retry, automatic fallback or resume):
+
+```sh
+--source-cache /work/source-cache/3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76.tsv.bz2
+```
+
+The exact cache filename comes from the tracked manifest's source SHA-256. Before
+computation Book rejects missing, symlinked, writable, nonregular, oversized,
+wrong-size or wrong-hash cache files. The file must have exactly 516148 bytes and
+the original pinned digest. The shared pipeline opens it instead of HTTP and
+reuses its bounded copy and full hash/size check before decoding. Review and
+candidate provenance record `source_transport="verified-worker-local-cache"`;
+the original source URL/profile/license/digest and operational receipt fields are
+unchanged. Cache bytes never become an approved raw archive or CI artifact.
+Failed jobs remain failed and untouched; a new explicit job/output is required.
+
 Book review IDs are `book:<32 lowercase hex>:<positive attempt>`, never GitHub IDs.
 Review rejects approval/training arguments; train requires both tracked inputs.
 `GITHUB_ACTIONS=true` or a non-Linux host fails.
