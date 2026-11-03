@@ -14,6 +14,8 @@ jobs:
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: cargo test --locked --workspace --all-targets
       - run: cargo test --locked -p predictor-core --test runtime -- --ignored
+      - run: python3 scripts/model_recipe.py --self-test
+      - run: cargo check --locked -p predictor-cli --no-default-features --examples
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

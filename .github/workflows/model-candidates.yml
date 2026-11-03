@@ -1,0 +1,146 @@
+name: Manual model candidates (not qualification)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Review emits hash/ID-only evidence; train requires separate human approval
+        type: choice
+        options: [review, train]
+        default: review
+        required: true
+      source_manifest:
+        description: Reviewed tracked source manifest
+        required: true
+        default: provenance/tatoeba-cc0-candidate.json
+      source_review:
+        description: Train only - separately approved content review JSON
+        required: false
+      review_report:
+        description: Train only - tracked review.json from the approved review run
+        required: false
+      exclusion_file:
+        description: Tracked linka-eval-exclusions-v1 hash-only JSON; never FINAL plaintext
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: predictor-model-training
+  cancel-in-progress: false
+jobs:
+  candidates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        if: inputs.mode == 'train'
+        continue-on-error: true
+        with:
+          repository: kpu/kenlm
+          ref: 4cb443e60b7bf2c0ddf3c745378f76cb59e254e5
+          path: .local/kenlm-source
+          persist-credentials: false
+      - name: Synthetic checks only
+        run: |
+          python3 scripts/model_recipe.py --self-test
+          cargo test --locked -p predictor-cli --lib prepare::
+          cargo test --locked -p predictor-cli --test prepare
+      - name: External estimator build dependencies
+        if: inputs.mode == 'train'
+        continue-on-error: true
+        run: sudo -n apt-get update && sudo -n apt-get install -y cmake libboost-program-options-dev libboost-system-dev libboost-thread-dev zlib1g-dev libbz2-dev liblzma-dev
+      - name: Explicitly reviewed source; bounded CPU-only Linux recipe
+        env:
+          SOURCE_MANIFEST: ${{ inputs.source_manifest }}
+          SOURCE_REVIEW: ${{ inputs.source_review }}
+          REVIEW_REPORT: ${{ inputs.review_report }}
+          EXCLUSION_FILE: ${{ inputs.exclusion_file }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          extra=()
+          if [ "$MODE" = train ]; then
+            test -n "$SOURCE_REVIEW"
+            test -n "$REVIEW_REPORT"
+            extra+=(--approval "$SOURCE_REVIEW" --review-report "$REVIEW_REPORT")
+          fi
+          mkdir -p .local
+          sudo -n systemd-run --wait --pipe --collect \
+            --unit="lp-model-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --uid="$(id -u)" --gid="$(id -g)" \
+            --working-directory="$GITHUB_WORKSPACE" \
+            --setenv="HOME=$HOME" --setenv="PATH=$PATH" --setenv=GITHUB_ACTIONS=true \
+            --setenv="GITHUB_RUN_ID=$GITHUB_RUN_ID" --setenv="GITHUB_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT" \
+            -p MemoryMax=6G -p MemorySwapMax=0 -p CPUQuota=200% \
+            -p RuntimeMaxSec=2700 -p TasksMax=128 -p LimitFSIZE=1073741824 \
+            python3 scripts/model_recipe.py \
+            --mode "$MODE" --manifest "$SOURCE_MANIFEST" \
+            --exclusion-file "$EXCLUSION_FILE" \
+            --kenlm-source .local/kenlm-source --output .local/model-400 "${extra[@]}"
+      - name: Stop only this run's owned unit if still active
+        if: always()
+        run: |
+          unit="lp-model-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.service"
+          if sudo -n systemctl is-active --quiet "$unit"; then
+            sudo -n systemctl stop "$unit"
+          fi
+      - name: Hash/ID-only review evidence, never approval or raw source
+        if: success() && inputs.mode == 'review'
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-review-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: .local/model-400/review/review.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Require U model and completed receipt before candidate artifacts
+        if: success() && inputs.mode == 'train'
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('.local/model-400')
+          assert json.loads((root / 'logs/recipe.json').read_text())['state'] == 'COMPLETED'
+          u = json.loads((root / 'bundle/U.receipt.json').read_text())
+          assert u['state'] == 'COMPLETED' and u['code'] == 0 and u['child_reaped']
+          assert (root / 'bundle/U.lpk').is_file()
+          PY
+      - name: Candidate artifacts, never a release; optional T failure retains U
+        if: success() && inputs.mode == 'train'
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-candidates-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: .local/model-400/bundle/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Immutable owned source archive only after separate content/archive approval
+        if: always() && inputs.mode == 'train' && hashFiles('.local/model-400/approved-source/approval-binding.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-approved-source-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: .local/model-400/approved-source/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Approved train diagnostics (never emitted by review)
+        if: always() && inputs.mode == 'train' && hashFiles('.local/model-400/approved-source/approval-binding.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-train-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: .local/model-400/logs/*.stderr
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Sanitized receipts only (no stdout, stderr, raw corpus or SQLite)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-receipts-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: |
+            .local/model-400/logs/*.json
+            .local/model-400/logs/*.resources
+          if-no-files-found: ignore
+          retention-days: 7

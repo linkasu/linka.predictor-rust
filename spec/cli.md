@@ -23,6 +23,21 @@ lp personal-replay MODEL EVENTS_JSONL GENERAL_PHRASES NEW_OUTPUT_DIRECTORY
 
 ## Preparation / attribution
 
+The historical `lp prepare` entry point below remains six-column Tatoeba/CC-BY.
+An explicit-source API and standalone `prepare_source` example additionally
+support the official four-column Tatoeba CC0 export, with hash/license/schema
+checks before decoding and no fabricated author. See the
+[model-400 preparation boundary](../docs/model-400-preparation.md) for profiles,
+first-party candidate evidence and the separately approved manual Linux CI recipe.
+Neither entry point grants legal, model-distribution or AAC approval.
+
+The explicit source API requires the curator-generated `linka-eval-exclusions-v1`
+JSON index (no FINAL plaintext); legacy `lp prepare` keeps its plaintext holdout.
+`prepare_source review|train MANIFEST RAW NEW_OUTPUT HASH_INDEX` exposes the new
+contract separately from this legacy CLI. Manual model CI defaults to review:
+only hash/ID/statistics artifacts, no corpus, ARPA, model or automatic approval.
+Training requires a separate source/exclusions/run-bound human decision.
+
 Acquisition is deliberately **cached/offline**: validates the supplied SHA-256,
 verifies every existing `.part` prefix byte before resuming a copy and atomically
 promotes only a complete matching file. No implicit network fallback. Initial
