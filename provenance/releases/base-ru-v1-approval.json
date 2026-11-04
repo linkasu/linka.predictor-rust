@@ -1,0 +1,445 @@
+{
+  "schema": "linka-base-model-release-approval-v1",
+  "repository": "linkasu/linka.predictor-rust",
+  "tag": "base-ru-v1",
+  "source_sha": "4568465fcc436345eb56dc49b44555b251b9c733",
+  "app_tooling_sha": "92ed1941c88324725102692f3e83fa0b60e33643",
+  "review": {
+    "status": "APPROVED",
+    "quality": "APPROVED",
+    "redistribution": "APPROVED",
+    "runtime": "APPROVED",
+    "content": "APPROVED",
+    "model_reproduction": "APPROVED",
+    "scope": [
+      "model",
+      "notices",
+      "source-code",
+      "aggregate-evidence",
+      "model-build-inputs"
+    ]
+  },
+  "licenses": {
+    "code": "GPL-3.0-or-later",
+    "data": "CC0-1.0"
+  },
+  "model": {
+    "variant": "T",
+    "sha256": "b3e736c8b42f6b75f39c26076d13ac99a65e6d10ef43b92de13ac288953b430a",
+    "bytes": 13330710
+  },
+  "runtime": {
+    "source_sha": "ec07b2cd49c1c2c684e6643f0dab75cf5895ebca",
+    "sha256": "ca6bce73b7ecf95b79bc5606b2807bac55fd0c8eebdaf24f5491f058ba5db63c",
+    "bytes": 717312
+  },
+  "source_manifest_sha256": "9d269cf6fa9a62f26b504d3d221b54669aa8e225d0063c919fdcfbca2285f3d2",
+  "source_review_sha256": "ef937468680f6eb6b21dd24d0659d52534a24f0aa49a61ac0e25860ab1abd2fe",
+  "exclusions_sha256": "2d7de12b376b28028af71f93896b85fadd1cd3ba56a77d9d612117ca5e1e3cdd",
+  "final": {
+    "seal_sha256": "582aa0d6a6ed5b8743ef6fac6b143047972839619df6997e21e18d08cb89f42a",
+    "protocol_sha256": "a392dc481cb59d88464972ffd34a5501a60a455f25da880dbba0a7e07533d1c6",
+    "freeze_sha256": "8aece51f7b4864c5b77ad74df37fe5d55acaeb02717229f6d817af9428b3d051",
+    "report_sha256": "6f134cef9059b3b47238fceb9ca929f8a4bd925826de3e65eef32ec30f5a1d4f",
+    "app_tooling_sha": "ffd1d55d66040b97df35ed6e68b20ab8a35e3d02"
+  },
+  "windows": {
+    "source_sha256": "5b93d6de6f48c18933fb11ab43acddfe3935f39e719e7aceff9f2e2c997234be",
+    "memory_sha256": "806b44871f577aa1fcd07147083447ff0b91007c57edd55c75bfa80243468a03",
+    "ui_sha256": "d657a8dd9b30ad88d53d01310e9f50f72bc0003195f37682dc3f56f53a1aaf71",
+    "app_tooling_sha": "14265bc24ec3bacbf41c9312fd5544182342a4f6"
+  },
+  "publication": {
+    "notice": {
+      "path": "provenance/releases/base-ru-v1-notice.md",
+      "sha256": "7852c8ecbf6a86ccb581a42d50741b61798dd5df433dfcbd9db3c7192b7c6233",
+      "bytes": 3256
+    },
+    "model_build_inputs": {
+      "path": "provenance/releases/base-ru-v1-model-build-inputs.zip",
+      "sha256": "828b0d84d6657a2f1d8b61992f3120b92a01c67955b0eef9ba6f0ff4cb0a2641",
+      "bytes": 3135935
+    },
+    "model_notices_sha256": "1d0ab4e6aa45d90e12ce86a771f3508945d5820c9cb6fdd8081f8d8a7733eb61",
+    "kenlm_license_sha256": "6d9f8894586896ee3b383c962e141f527edeb54f561a6bd189d0eb08380c4cc2",
+    "code_license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  },
+  "raw_source": {
+    "published": false,
+    "reproduction_input": "REQUIRED_SEPARATELY"
+  },
+  "sources": {
+    "model": {
+      "sha": "4568465fcc436345eb56dc49b44555b251b9c733",
+      "files": {
+        ".github/workflows/model-candidates.yml": {
+          "sha256": "2ae54ac1aac83f4736cebbf50ea6ef41d28806d11be55d5f3bb4e4fd7a3c8625",
+          "bytes": 11028
+        },
+        ".github/workflows/windows-runtime.yml": {
+          "sha256": "4c02924355114a7eaf5666f1f5234049e4e089306fac8bc19fb35d40a204541a",
+          "bytes": 8508
+        },
+        "Cargo.lock": {
+          "sha256": "c6be09603323601d5b4859dc9783fe64e447bd29a854e1085a66ce01a053ef88",
+          "bytes": 15387
+        },
+        "Cargo.toml": {
+          "sha256": "c8fcefb7c0f0810e01a1327181f75ef36972c8ed18432be6f54871261fb4cd8c",
+          "bytes": 139
+        },
+        "LICENSE": {
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "bytes": 35149
+        },
+        "crates/predictor-cli/Cargo.toml": {
+          "sha256": "91db5a8c347eacb1cf9f69b882b3daa06d25755faa6633de2075a91682785dc4",
+          "bytes": 1207
+        },
+        "crates/predictor-cli/examples/aac_journeys.rs": {
+          "sha256": "74da4dd0996ecba05e1983f0842722040349196a7d49f203582a1d7b2a66dde9",
+          "bytes": 34258
+        },
+        "crates/predictor-cli/examples/baseline_bundle.rs": {
+          "sha256": "39aaa3a95b66ce3cbee3ac5ebef42a782bc0edc8afebd7c69e7bddaa30c45523",
+          "bytes": 3774
+        },
+        "crates/predictor-cli/examples/make_eval_exclusions.rs": {
+          "sha256": "c793fe294b769a8c9329eafc39c292932ea2507155502b0f35064f221094ea3c",
+          "bytes": 1377
+        },
+        "crates/predictor-cli/examples/model_final_stream.rs": {
+          "sha256": "46b546cec1d218aa27dbc544d8764315b3727606d02b788f33851c8c360bf844",
+          "bytes": 6839
+        },
+        "crates/predictor-cli/examples/perf_probe.rs": {
+          "sha256": "b73f848b672160a82b61e13417a99afe6e27c73f88c2cdfe2cc76e0d46700708",
+          "bytes": 1603
+        },
+        "crates/predictor-cli/examples/prepare_source.rs": {
+          "sha256": "de9ec3abfac50cc7653d14ced768fd61cfe87209312259113f9a7684b5eaea3c",
+          "bytes": 1048
+        },
+        "crates/predictor-cli/src/client.rs": {
+          "sha256": "3484683f56b4f1b0ffe0bf1149f996044d29a86d2c3b9ece98b91497340c7d71",
+          "bytes": 1743
+        },
+        "crates/predictor-cli/src/diagnostics.rs": {
+          "sha256": "25bf6a1e039ba0b889a077526155a23c82ac658c7fe87594de251b18f69f5ad0",
+          "bytes": 14950
+        },
+        "crates/predictor-cli/src/electron.rs": {
+          "sha256": "f3e46e8209811a3a640877cbc85290990d9b7083a9d5b35d41718ad0817ce401",
+          "bytes": 2901
+        },
+        "crates/predictor-cli/src/evaluate.rs": {
+          "sha256": "87b30a6b982a12726c9865a18ff17866d5535fe1eb11626500c9303ae78626cb",
+          "bytes": 30134
+        },
+        "crates/predictor-cli/src/lexicon.rs": {
+          "sha256": "ed1066c464fe248374778e001ea007b9c29c2ebfc8559ca958c687e1d9cb38e5",
+          "bytes": 3926
+        },
+        "crates/predictor-cli/src/lib.rs": {
+          "sha256": "1a7d0c2fb6df8f67c1b54013cc3a74fdf8cf5d935adeff30c80a0532d3d49795",
+          "bytes": 275
+        },
+        "crates/predictor-cli/src/main.rs": {
+          "sha256": "6cf6fcb7f80601264c446d3b6c0d75b03391f7ce3508cfa23e4cc05166bf6d26",
+          "bytes": 11849
+        },
+        "crates/predictor-cli/src/pipeline.rs": {
+          "sha256": "f2a32bf2cf5900d4d595734679cb9c3e09c72f085abe8a836cd81a02f388487b",
+          "bytes": 34723
+        },
+        "crates/predictor-cli/src/prepare.rs": {
+          "sha256": "5f6251a82444a03ec4f8d2bce3e57fcab1d798589a3e56d9acd4e69f48c3f528",
+          "bytes": 37133
+        },
+        "crates/predictor-cli/src/prepare/exclusions.rs": {
+          "sha256": "c95f071dea928ddfeffb7e680a479c1508df874735cff416a99ebc6b4f187241",
+          "bytes": 11125
+        },
+        "crates/predictor-cli/tests/actions.rs": {
+          "sha256": "b1c41802bb2ffef0d23148478a13c743b599dec05848a3c8c292f53a6502fe16",
+          "bytes": 1691
+        },
+        "crates/predictor-cli/tests/book_orphan.rs": {
+          "sha256": "a5189b3fc649d246ab6dfd17f5128f385f3bb746c2dcb753f5b3008e175085af",
+          "bytes": 6715
+        },
+        "crates/predictor-cli/tests/budget.rs": {
+          "sha256": "e994259591cac5f581be785e25ca0872769ac955dc1bb8c88229669edd6d2f30",
+          "bytes": 6189
+        },
+        "crates/predictor-cli/tests/checkpoint.rs": {
+          "sha256": "180f8d66a2435301d14baa39b9e1af3d9ae3ada3722c83b95ebef2769776bc5e",
+          "bytes": 14705
+        },
+        "crates/predictor-cli/tests/diagnostics.rs": {
+          "sha256": "33e307bb435c359ff07402eac242dc6470b836baf954ebdfb58af5367baf686d",
+          "bytes": 5106
+        },
+        "crates/predictor-cli/tests/evaluate_command.rs": {
+          "sha256": "f180f8db4fb49cf4faedfbd3e075b80a236cb04ec5c072cdc277284a253bb9e0",
+          "bytes": 5074
+        },
+        "crates/predictor-cli/tests/grouped_evaluation.rs": {
+          "sha256": "04bce6467642b99312660de36473188eda4bf49c707eb43d10c01f2f65eb442c",
+          "bytes": 20697
+        },
+        "crates/predictor-cli/tests/lexicon.rs": {
+          "sha256": "9698194cf7345d4e3a4454b20a0735923ebbeb1a19a61cd4c8f5e9f73ca5a100",
+          "bytes": 2274
+        },
+        "crates/predictor-cli/tests/prepare.rs": {
+          "sha256": "ab4934ef4d0e8b4a21a8a1195628a8a532a3afd7a597af0e8c4306f6b785ffb0",
+          "bytes": 7887
+        },
+        "crates/predictor-cli/tests/privacy.rs": {
+          "sha256": "3019795d5daab707c07031fdfb2f7962b96b2714d821925e035d9b1cbc455c58",
+          "bytes": 4994
+        },
+        "crates/predictor-core/Cargo.toml": {
+          "sha256": "758a0db2e0700517dfc84d5e8eea9813ef2bc4025a8c6a7c330c5dd93d4c59b2",
+          "bytes": 372
+        },
+        "crates/predictor-core/src/lib.rs": {
+          "sha256": "1363fd083847d8638ef01510ab3c2214b4c8c5d69252b8ce87c8806ea9c9a9ca",
+          "bytes": 374
+        },
+        "crates/predictor-core/src/model.rs": {
+          "sha256": "0b9d932bf83b962e72e45cb9f7b41b6b0f3843ad7e085b70b2cf9e16347c81d7",
+          "bytes": 44156
+        },
+        "crates/predictor-core/src/personal.rs": {
+          "sha256": "1be136adda6cabfc4db3b8285301b1812057e85b9becc1f6ee3ff9e9a77cfdf4",
+          "bytes": 6126
+        },
+        "crates/predictor-core/src/search.rs": {
+          "sha256": "66e12260bab2bff2484b66b4fb2dabd21f997264ec0737b30ad9c0f33236618b",
+          "bytes": 26208
+        },
+        "crates/predictor-core/src/text.rs": {
+          "sha256": "778545a986e99333330d5582b403d1123750a3d87cf95f4b12ec5cade9325e4f",
+          "bytes": 3744
+        },
+        "crates/predictor-core/tests/kenlm_differential.rs": {
+          "sha256": "05ac3a3afbc6110557e731cb7d62e61c9c720f0ae2a4de2ee2ceedb3257671f3",
+          "bytes": 11892
+        },
+        "crates/predictor-core/tests/personal_privacy.rs": {
+          "sha256": "d6911845eee50f62aa46cb8227b39e2e440ee351124f18cec05571b139cda2f1",
+          "bytes": 4702
+        },
+        "crates/predictor-core/tests/runtime.rs": {
+          "sha256": "12765c7f62a8b642002ade52b184aee73ccd29632283f117d864769aeda5a2f1",
+          "bytes": 19161
+        },
+        "rust-toolchain.toml": {
+          "sha256": "887f9be066a15585a2c583578e84b0fcb541126d81546276bad3d2ff00d61167",
+          "bytes": 86
+        },
+        "scripts/book_model.py": {
+          "sha256": "5cfc88f8f043794ce336bf6d50ab1ccf0b164afba8c8329dd211923e98ec8187",
+          "bytes": 11998
+        },
+        "scripts/model_recipe.py": {
+          "sha256": "bd0e177f78d24f088b03d74c7a2252b62da58c72a9ee0409e56a2de97e4e51a5",
+          "bytes": 37945
+        }
+      }
+    },
+    "runtime": {
+      "sha": "ec07b2cd49c1c2c684e6643f0dab75cf5895ebca",
+      "files": {
+        ".github/workflows/windows-runtime.yml": {
+          "sha256": "4c02924355114a7eaf5666f1f5234049e4e089306fac8bc19fb35d40a204541a",
+          "bytes": 8508
+        },
+        "Cargo.lock": {
+          "sha256": "c6be09603323601d5b4859dc9783fe64e447bd29a854e1085a66ce01a053ef88",
+          "bytes": 15387
+        },
+        "Cargo.toml": {
+          "sha256": "c8fcefb7c0f0810e01a1327181f75ef36972c8ed18432be6f54871261fb4cd8c",
+          "bytes": 139
+        },
+        "LICENSE": {
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "bytes": 35149
+        },
+        "crates/predictor-cli/Cargo.toml": {
+          "sha256": "c0d1f8fa3ee8e53f3d1b68d94ce6ffc74311a57831cbbf9bea294c6e3c0cc5a5",
+          "bytes": 926
+        },
+        "crates/predictor-cli/examples/aac_journeys.rs": {
+          "sha256": "74da4dd0996ecba05e1983f0842722040349196a7d49f203582a1d7b2a66dde9",
+          "bytes": 34258
+        },
+        "crates/predictor-cli/examples/baseline_bundle.rs": {
+          "sha256": "39aaa3a95b66ce3cbee3ac5ebef42a782bc0edc8afebd7c69e7bddaa30c45523",
+          "bytes": 3774
+        },
+        "crates/predictor-cli/examples/perf_probe.rs": {
+          "sha256": "b73f848b672160a82b61e13417a99afe6e27c73f88c2cdfe2cc76e0d46700708",
+          "bytes": 1603
+        },
+        "crates/predictor-cli/src/client.rs": {
+          "sha256": "3484683f56b4f1b0ffe0bf1149f996044d29a86d2c3b9ece98b91497340c7d71",
+          "bytes": 1743
+        },
+        "crates/predictor-cli/src/diagnostics.rs": {
+          "sha256": "25bf6a1e039ba0b889a077526155a23c82ac658c7fe87594de251b18f69f5ad0",
+          "bytes": 14950
+        },
+        "crates/predictor-cli/src/electron.rs": {
+          "sha256": "f3e46e8209811a3a640877cbc85290990d9b7083a9d5b35d41718ad0817ce401",
+          "bytes": 2901
+        },
+        "crates/predictor-cli/src/evaluate.rs": {
+          "sha256": "87b30a6b982a12726c9865a18ff17866d5535fe1eb11626500c9303ae78626cb",
+          "bytes": 30134
+        },
+        "crates/predictor-cli/src/lexicon.rs": {
+          "sha256": "ed1066c464fe248374778e001ea007b9c29c2ebfc8559ca958c687e1d9cb38e5",
+          "bytes": 3926
+        },
+        "crates/predictor-cli/src/lib.rs": {
+          "sha256": "1a7d0c2fb6df8f67c1b54013cc3a74fdf8cf5d935adeff30c80a0532d3d49795",
+          "bytes": 275
+        },
+        "crates/predictor-cli/src/main.rs": {
+          "sha256": "6cf6fcb7f80601264c446d3b6c0d75b03391f7ce3508cfa23e4cc05166bf6d26",
+          "bytes": 11849
+        },
+        "crates/predictor-cli/src/pipeline.rs": {
+          "sha256": "b5eff2e5d9dc70736af21341ad187153c23364c6db501d7b7920adc5c5061639",
+          "bytes": 34394
+        },
+        "crates/predictor-cli/src/prepare.rs": {
+          "sha256": "e7afefa54f64ff27befe12b6c17965a2ed0f5a9f99b2ee4441259fd5fc8a35d8",
+          "bytes": 16289
+        },
+        "crates/predictor-cli/tests/actions.rs": {
+          "sha256": "b1c41802bb2ffef0d23148478a13c743b599dec05848a3c8c292f53a6502fe16",
+          "bytes": 1691
+        },
+        "crates/predictor-cli/tests/book_orphan.rs": {
+          "sha256": "a5189b3fc649d246ab6dfd17f5128f385f3bb746c2dcb753f5b3008e175085af",
+          "bytes": 6715
+        },
+        "crates/predictor-cli/tests/budget.rs": {
+          "sha256": "e994259591cac5f581be785e25ca0872769ac955dc1bb8c88229669edd6d2f30",
+          "bytes": 6189
+        },
+        "crates/predictor-cli/tests/checkpoint.rs": {
+          "sha256": "180f8d66a2435301d14baa39b9e1af3d9ae3ada3722c83b95ebef2769776bc5e",
+          "bytes": 14705
+        },
+        "crates/predictor-cli/tests/diagnostics.rs": {
+          "sha256": "33e307bb435c359ff07402eac242dc6470b836baf954ebdfb58af5367baf686d",
+          "bytes": 5106
+        },
+        "crates/predictor-cli/tests/evaluate_command.rs": {
+          "sha256": "f180f8db4fb49cf4faedfbd3e075b80a236cb04ec5c072cdc277284a253bb9e0",
+          "bytes": 5074
+        },
+        "crates/predictor-cli/tests/grouped_evaluation.rs": {
+          "sha256": "04bce6467642b99312660de36473188eda4bf49c707eb43d10c01f2f65eb442c",
+          "bytes": 20697
+        },
+        "crates/predictor-cli/tests/lexicon.rs": {
+          "sha256": "9698194cf7345d4e3a4454b20a0735923ebbeb1a19a61cd4c8f5e9f73ca5a100",
+          "bytes": 2274
+        },
+        "crates/predictor-cli/tests/prepare.rs": {
+          "sha256": "ab4934ef4d0e8b4a21a8a1195628a8a532a3afd7a597af0e8c4306f6b785ffb0",
+          "bytes": 7887
+        },
+        "crates/predictor-cli/tests/privacy.rs": {
+          "sha256": "3019795d5daab707c07031fdfb2f7962b96b2714d821925e035d9b1cbc455c58",
+          "bytes": 4994
+        },
+        "crates/predictor-core/Cargo.toml": {
+          "sha256": "758a0db2e0700517dfc84d5e8eea9813ef2bc4025a8c6a7c330c5dd93d4c59b2",
+          "bytes": 372
+        },
+        "crates/predictor-core/src/lib.rs": {
+          "sha256": "1363fd083847d8638ef01510ab3c2214b4c8c5d69252b8ce87c8806ea9c9a9ca",
+          "bytes": 374
+        },
+        "crates/predictor-core/src/model.rs": {
+          "sha256": "0b9d932bf83b962e72e45cb9f7b41b6b0f3843ad7e085b70b2cf9e16347c81d7",
+          "bytes": 44156
+        },
+        "crates/predictor-core/src/personal.rs": {
+          "sha256": "1be136adda6cabfc4db3b8285301b1812057e85b9becc1f6ee3ff9e9a77cfdf4",
+          "bytes": 6126
+        },
+        "crates/predictor-core/src/search.rs": {
+          "sha256": "66e12260bab2bff2484b66b4fb2dabd21f997264ec0737b30ad9c0f33236618b",
+          "bytes": 26208
+        },
+        "crates/predictor-core/src/text.rs": {
+          "sha256": "778545a986e99333330d5582b403d1123750a3d87cf95f4b12ec5cade9325e4f",
+          "bytes": 3744
+        },
+        "crates/predictor-core/tests/kenlm_differential.rs": {
+          "sha256": "05ac3a3afbc6110557e731cb7d62e61c9c720f0ae2a4de2ee2ceedb3257671f3",
+          "bytes": 11892
+        },
+        "crates/predictor-core/tests/personal_privacy.rs": {
+          "sha256": "d6911845eee50f62aa46cb8227b39e2e440ee351124f18cec05571b139cda2f1",
+          "bytes": 4702
+        },
+        "crates/predictor-core/tests/runtime.rs": {
+          "sha256": "12765c7f62a8b642002ade52b184aee73ccd29632283f117d864769aeda5a2f1",
+          "bytes": 19161
+        },
+        "rust-toolchain.toml": {
+          "sha256": "887f9be066a15585a2c583578e84b0fcb541126d81546276bad3d2ff00d61167",
+          "bytes": 86
+        }
+      }
+    }
+  },
+  "runs": {
+    "model": {
+      "run_id": 41752847049,
+      "run_attempt": 1,
+      "artifact_id": 13287251604,
+      "head_sha": "4568465fcc436345eb56dc49b44555b251b9c733",
+      "artifact_name": "model-candidates-41752847049-1",
+      "archive_sha256": "2876fe901f571436c30b72e346899b6eb24585593137b2602aa03898d1275525",
+      "archive_bytes": 7526131
+    },
+    "runtime": {
+      "run_id": 41699527926,
+      "run_attempt": 1,
+      "artifact_id": 13261064047,
+      "head_sha": "ec07b2cd49c1c2c684e6643f0dab75cf5895ebca",
+      "artifact_name": "windows-runtime-pr-unreviewed-ec07b2cd49c1c2c684e6643f0dab75cf5895ebca",
+      "archive_sha256": "0144bcc1ae1a5d668064ccf6285d27b1948669589481111cc42b3a999aa5110c",
+      "archive_bytes": 372399
+    },
+    "final": {
+      "run_id": 41758860254,
+      "run_attempt": 1,
+      "artifact_id": 13289980820,
+      "head_sha": "4568465fcc436345eb56dc49b44555b251b9c733",
+      "artifact_name": "ui-final-aggregate-41758860254-1",
+      "archive_sha256": "5bd41de8948b03c6434be6def2117fa85d060498bf81b6f7dfa146a98c527806",
+      "archive_bytes": 6825
+    },
+    "windows": {
+      "run_id": 41756202814,
+      "run_attempt": 1,
+      "artifact_id": 13288587652,
+      "head_sha": "4568465fcc436345eb56dc49b44555b251b9c733",
+      "artifact_name": "windows-model-candidate-41756202814-1",
+      "archive_sha256": "6968b93c851f5ad683d1b083e37aca2e6633647b0ec93bc7daa49e6b8704709e",
+      "archive_bytes": 14586
+    }
+  }
+}
