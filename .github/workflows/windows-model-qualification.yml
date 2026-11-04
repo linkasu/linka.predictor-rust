@@ -131,7 +131,7 @@ jobs:
           name: windows-model-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: app/qualification/*.json
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 90
       - name: State evidence boundary, never production auto-approval
         if: always()
         working-directory: .

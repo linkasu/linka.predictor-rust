@@ -1,63 +1,71 @@
-name: Manual model candidates (not qualification)
+name: Manual Book model candidate import (not qualification)
 on:
   workflow_dispatch:
     inputs:
-      mode:
-        description: Review emits hash/ID-only evidence; train requires separate human approval
-        type: choice
-        options: [review, train, book-import]
-        default: review
+      import_manifest:
+        description: Tracked main-tree linka-book-candidate-import-v1 JSON path (no secrets)
+        type: string
         required: true
-      source_manifest:
-        description: Reviewed tracked source manifest
-        required: true
-        default: provenance/tatoeba-cc0-candidate.json
-      source_review:
-        description: Train only - separately approved content review JSON
-        required: false
-      review_report:
-        description: Train only - tracked review.json from the approved review run
-        required: false
-      exclusion_file:
-        description: Tracked linka-eval-exclusions-v1 hash-only JSON; never FINAL plaintext
-        required: true
-      book_release_id:
-        description: Book import only - unpublished owned draft release ID
-        required: false
-      book_archive_sha256:
-        description: Book import only - exact book-candidates.zip SHA256
-        required: false
-      book_archive_bytes:
-        description: Book import only - exact ZIP bytes, at most 300 MiB
-        required: false
-      app_tooling_sha:
-        description: Book import only - exact trusted app main ancestor SHA
-        required: false
-      book_transport:
-        description: Blank for legacy API; repository-secret reads a one-asset capability, never a repository token
-        required: false
 permissions:
   contents: read
   actions: read
 concurrency:
-  group: predictor-model-training
+  group: predictor-model-import
   cancel-in-progress: false
 jobs:
   candidates:
-    if: inputs.mode != 'book-import' || (github.ref == 'refs/heads/main' && github.repository == 'linkasu/linka.predictor-rust')
+    if: github.ref == 'refs/heads/main' && github.repository == 'linkasu/linka.predictor-rust'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
-      - name: Mask and isolate optional operator read capability
-        uses: actions/github-script@v7
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: linkasu/linka.looks-electron
+          ref: main
+          fetch-depth: 0
+          path: .local/app-tooling
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.22.2"
+      - name: Validate tracked manifest before any Book download
+        id: manifest
         env:
-          BOOK_READ_CAPABILITY: ${{ inputs.book_transport == 'repository-secret' && secrets.LINKA_BOOK_CANDIDATE_READ_CAPABILITY || '' }}
+          IMPORT_MANIFEST: ${{ inputs.import_manifest }}
+        run: |
+          node <<'JS'
+          const fs = require('node:fs');
+          const {execFileSync} = require('node:child_process');
+          const {readImportManifest} = require('./.local/app-tooling/scripts/ci/import-book-candidate.cjs');
+          const {manifest: m} = readImportManifest(process.cwd(), process.env.IMPORT_MANIFEST, process.env.GITHUB_WORKFLOW_SHA);
+          if (process.env.GITHUB_SHA !== process.env.GITHUB_WORKFLOW_SHA) throw new Error('main workflow tree required');
+          execFileSync('git', ['merge-base', '--is-ancestor', process.env.GITHUB_WORKFLOW_SHA, 'origin/main']);
+          execFileSync('git', ['merge-base', '--is-ancestor', m.model_source_sha, 'origin/main']);
+          execFileSync('git', ['merge-base', '--is-ancestor', m.app_tooling_sha, 'origin/main'], {cwd: '.local/app-tooling'});
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `model_source_sha=${m.model_source_sha}\napp_tooling_sha=${m.app_tooling_sha}\n`);
+          JS
+      - name: Pin selected app main-history tooling
+        env:
+          APP_TOOLING_SHA: ${{ steps.manifest.outputs.app_tooling_sha }}
+        run: git -C .local/app-tooling checkout --detach "$APP_TOOLING_SHA"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.manifest.outputs.model_source_sha }}
+          fetch-depth: 0
+          path: .local/model-source
+          persist-credentials: false
+      - name: Mask and isolate one-asset read capability (never a PAT)
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          BOOK_READ_CAPABILITY: ${{ secrets.LINKA_BOOK_CANDIDATE_READ_CAPABILITY }}
         with:
           script: |
-            const selector = context.payload.inputs?.book_transport ?? '';
-            if (selector === '') return;
             try {
-              if (selector !== 'repository-secret') throw new Error('invalid');
               const raw = process.env.BOOK_READ_CAPABILITY;
               if (typeof raw !== 'string' || raw.length === 0) throw new Error('missing');
               core.setSecret(raw);
@@ -65,170 +73,29 @@ jobs:
               const value = JSON.parse(raw);
               if (typeof value?.download_url === 'string') core.setSecret(value.download_url);
               if (context.eventName !== 'workflow_dispatch' || context.ref !== 'refs/heads/main' ||
-                  `${context.repo.owner}/${context.repo.repo}` !== 'linkasu/linka.predictor-rust' ||
-                  context.payload.inputs.mode !== 'book-import') throw new Error('invalid');
+                  `${context.repo.owner}/${context.repo.repo}` !== 'linkasu/linka.predictor-rust') throw new Error('invalid');
               const file = require('node:path').join(process.env.RUNNER_TEMP, 'book-candidate-transport.json');
               require('node:fs').writeFileSync(file, raw, { flag: 'wx', mode: 0o600 });
               core.exportVariable('BOOK_TRANSPORT_FILE', file);
             } catch {
               core.setFailed('Book transport gate rejected input; no capability details logged.');
             }
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/checkout@v4
-        if: inputs.mode == 'train'
-        continue-on-error: true
-        with:
-          repository: kpu/kenlm
-          ref: 4cb443e60b7bf2c0ddf3c745378f76cb59e254e5
-          path: .local/kenlm-source
-          persist-credentials: false
-      - name: Synthetic checks only
-        if: inputs.mode != 'book-import'
-        run: |
-          python3 scripts/model_recipe.py --self-test
-          cargo test --locked -p predictor-cli --lib prepare::
-          cargo test --locked -p predictor-cli --test prepare
-      - name: External estimator build dependencies
-        if: inputs.mode == 'train'
-        continue-on-error: true
-        run: sudo -n apt-get update && sudo -n apt-get install -y cmake libboost-program-options-dev libboost-system-dev libboost-thread-dev zlib1g-dev libbz2-dev liblzma-dev
-      - name: Explicitly reviewed source; bounded CPU-only Linux recipe
-        if: inputs.mode != 'book-import'
+      - name: Import verified Book outputs; no CI training, build or inference
         env:
-          SOURCE_MANIFEST: ${{ inputs.source_manifest }}
-          SOURCE_REVIEW: ${{ inputs.source_review }}
-          REVIEW_REPORT: ${{ inputs.review_report }}
-          EXCLUSION_FILE: ${{ inputs.exclusion_file }}
-          MODE: ${{ inputs.mode }}
-        run: |
-          extra=()
-          if [ "$MODE" = train ]; then
-            test -n "$SOURCE_REVIEW"
-            test -n "$REVIEW_REPORT"
-            extra+=(--approval "$SOURCE_REVIEW" --review-report "$REVIEW_REPORT")
-          fi
-          mkdir -p .local
-          sudo -n systemd-run --wait --pipe --collect \
-            --unit="lp-model-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --uid="$(id -u)" --gid="$(id -g)" \
-            --working-directory="$GITHUB_WORKSPACE" \
-            --setenv="HOME=$HOME" --setenv="PATH=$PATH" --setenv=GITHUB_ACTIONS=true \
-            --setenv="GITHUB_RUN_ID=$GITHUB_RUN_ID" --setenv="GITHUB_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT" \
-            -p MemoryMax=6G -p MemorySwapMax=0 -p CPUQuota=200% \
-            -p RuntimeMaxSec=2700 -p TasksMax=128 -p LimitFSIZE=1073741824 \
-            python3 scripts/model_recipe.py \
-            --mode "$MODE" --manifest "$SOURCE_MANIFEST" \
-            --exclusion-file "$EXCLUSION_FILE" \
-            --kenlm-source .local/kenlm-source --output .local/model-400 "${extra[@]}"
-      - name: Stop only this run's owned unit if still active
-        if: always() && inputs.mode != 'book-import'
-        run: |
-          unit="lp-model-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.service"
-          if sudo -n systemctl is-active --quiet "$unit"; then
-            sudo -n systemctl stop "$unit"
-          fi
-      - name: Hash/ID-only review evidence, never approval or raw source
-        if: success() && inputs.mode == 'review'
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-review-${{ github.run_id }}-${{ github.run_attempt }}
-          include-hidden-files: true
-          path: .local/model-400/review/review.json
-          if-no-files-found: error
-          retention-days: 7
-      - name: Require U model and completed receipt before candidate artifacts
-        if: success() && inputs.mode == 'train'
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          root = Path('.local/model-400')
-          assert json.loads((root / 'logs/recipe.json').read_text())['state'] == 'COMPLETED'
-          u = json.loads((root / 'bundle/U.receipt.json').read_text())
-          assert u['state'] == 'COMPLETED' and u['code'] == 0 and u['child_reaped']
-          assert (root / 'bundle/U.lpk').is_file()
-          PY
-      - name: Validate trusted app tooling reference
-        if: inputs.mode == 'book-import'
-        env:
-          APP_TOOLING_SHA: ${{ inputs.app_tooling_sha }}
-        run: |
-          [[ "$APP_TOOLING_SHA" =~ ^[0-9a-f]{40}$ ]]
-      - uses: actions/checkout@v4
-        if: inputs.mode == 'book-import'
-        with:
-          repository: linkasu/linka.looks-electron
-          ref: main
-          fetch-depth: 0
-          path: .local/app-tooling
-          persist-credentials: false
-      - name: Select exact app main-history helper
-        if: inputs.mode == 'book-import'
-        env:
-          APP_TOOLING_SHA: ${{ inputs.app_tooling_sha }}
-        run: |
-          git -C .local/app-tooling merge-base --is-ancestor "$APP_TOOLING_SHA" origin/main
-          git -C .local/app-tooling checkout --detach "$APP_TOOLING_SHA"
-      - uses: actions/setup-node@v4
-        if: inputs.mode == 'book-import'
-        with:
-          node-version: '22'
-      - name: Import verified book-local filtered outputs (never CI training)
-        if: inputs.mode == 'book-import'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BOOK_RELEASE_ID: ${{ inputs.book_release_id }}
-          BOOK_ARCHIVE_SHA256: ${{ inputs.book_archive_sha256 }}
-          BOOK_ARCHIVE_BYTES: ${{ inputs.book_archive_bytes }}
-          APP_TOOLING_SHA: ${{ inputs.app_tooling_sha }}
-          SOURCE_MANIFEST: ${{ inputs.source_manifest }}
-          SOURCE_REVIEW: ${{ inputs.source_review }}
-          REVIEW_REPORT: ${{ inputs.review_report }}
-          EXCLUSION_FILE: ${{ inputs.exclusion_file }}
+          IMPORT_MANIFEST: ${{ inputs.import_manifest }}
         run: node .local/app-tooling/scripts/ci/import-book-candidate.cjs
       - name: Candidate artifacts, never a release; optional T failure retains U
-        if: success() && (inputs.mode == 'train' || inputs.mode == 'book-import')
-        uses: actions/upload-artifact@v4
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: model-candidates-${{ github.run_id }}-${{ github.run_attempt }}
           include-hidden-files: true
           path: .local/model-400/bundle/
           if-no-files-found: error
-          retention-days: 7
-      - name: Immutable owned source archive only after separate content/archive approval
-        if: always() && inputs.mode == 'train' && hashFiles('.local/model-400/approved-source/approval-binding.json') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-approved-source-${{ github.run_id }}-${{ github.run_attempt }}
-          include-hidden-files: true
-          path: .local/model-400/approved-source/
-          if-no-files-found: error
-          retention-days: 7
-      - name: Approved train diagnostics (never emitted by review)
-        if: always() && inputs.mode == 'train' && hashFiles('.local/model-400/approved-source/approval-binding.json') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-train-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          include-hidden-files: true
-          path: .local/model-400/logs/*.stderr
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Sanitized receipts only (no stdout, stderr, raw corpus or SQLite)
-        if: always() && inputs.mode != 'book-import'
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-receipts-${{ github.run_id }}-${{ github.run_attempt }}
-          include-hidden-files: true
-          path: |
-            .local/model-400/logs/*.json
-            .local/model-400/logs/*.resources
-          if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 90
       - name: Remove isolated operator capability
-        if: always() && inputs.mode == 'book-import'
-        uses: actions/github-script@v7
+        if: always()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const file = require('node:path').join(process.env.RUNNER_TEMP, 'book-candidate-transport.json');
