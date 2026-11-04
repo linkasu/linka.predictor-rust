@@ -1,7 +1,7 @@
 {
   "schema": "linka-eval-exclusions-v1",
   "normalizer": "nfc-lower-v1",
-  "source_seal_sha256": "a32897fbb75ad657ec01f9e36a6db55936a69d77f5602bb1eef03dfa719088e4",
+  "source_seal_sha256": "582aa0d6a6ed5b8743ef6fac6b143047972839619df6997e21e18d08cb89f42a",
   "families": [
     {
       "id": "dev-000001",
