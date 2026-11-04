@@ -33,6 +33,9 @@ on:
       app_tooling_sha:
         description: Book import only - exact trusted app main ancestor SHA
         required: false
+      book_transport:
+        description: Blank for legacy API; repository-secret reads a one-asset capability, never a repository token
+        required: false
 permissions:
   contents: read
   actions: read
@@ -41,10 +44,35 @@ concurrency:
   cancel-in-progress: false
 jobs:
   candidates:
-    if: inputs.mode != 'book-import' || github.ref == 'refs/heads/main'
+    if: inputs.mode != 'book-import' || (github.ref == 'refs/heads/main' && github.repository == 'linkasu/linka.predictor-rust')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
+      - name: Mask and isolate optional operator read capability
+        uses: actions/github-script@v7
+        env:
+          BOOK_READ_CAPABILITY: ${{ inputs.book_transport == 'repository-secret' && secrets.LINKA_BOOK_CANDIDATE_READ_CAPABILITY || '' }}
+        with:
+          script: |
+            const selector = context.payload.inputs?.book_transport ?? '';
+            if (selector === '') return;
+            try {
+              if (selector !== 'repository-secret') throw new Error('invalid');
+              const raw = process.env.BOOK_READ_CAPABILITY;
+              if (typeof raw !== 'string' || raw.length === 0) throw new Error('missing');
+              core.setSecret(raw);
+              if (Buffer.byteLength(raw, 'utf8') > 65000) throw new Error('oversized');
+              const value = JSON.parse(raw);
+              if (typeof value?.download_url === 'string') core.setSecret(value.download_url);
+              if (context.eventName !== 'workflow_dispatch' || context.ref !== 'refs/heads/main' ||
+                  `${context.repo.owner}/${context.repo.repo}` !== 'linkasu/linka.predictor-rust' ||
+                  context.payload.inputs.mode !== 'book-import') throw new Error('invalid');
+              const file = require('node:path').join(process.env.RUNNER_TEMP, 'book-candidate-transport.json');
+              require('node:fs').writeFileSync(file, raw, { flag: 'wx', mode: 0o600 });
+              core.exportVariable('BOOK_TRANSPORT_FILE', file);
+            } catch {
+              core.setFailed('Book transport gate rejected input; no capability details logged.');
+            }
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -198,3 +226,10 @@ jobs:
             .local/model-400/logs/*.resources
           if-no-files-found: ignore
           retention-days: 7
+      - name: Remove isolated operator capability
+        if: always() && inputs.mode == 'book-import'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const file = require('node:path').join(process.env.RUNNER_TEMP, 'book-candidate-transport.json');
+            require('node:fs').rmSync(file, { force: true });
