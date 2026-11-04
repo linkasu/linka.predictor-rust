@@ -172,13 +172,24 @@ jobs:
             assert.equal(inventory.tag, 'base-ru-v1');
             assert.equal(inventory.source_sha, process.env.SOURCE_SHA);
             const names = ['model.lpk','lp-electron.exe','LICENSE','MODEL_NOTICE.md','MODEL_SOURCE_NOTICES.txt','KenLM-LICENSE','quality.json','performance.json','model-source.tar','runtime-source.tar','provenance.json','REPRODUCTION.json'];
+            // The read-only prepare job seals the exact descriptor from tracked release approval.
+            if (inventory.model_build_inputs !== undefined) {
+              const capsule = inventory.model_build_inputs;
+              assert.deepEqual(Object.keys(capsule || {}).sort(), ['bytes','path','sha256']);
+              assert(capsule && /^provenance\/releases\/[a-zA-Z0-9_./-]+\.zip$/.test(capsule.path));
+              assert(capsule.path.split('/').every(part => part && part !== '.' && part !== '..'));
+              assert(/^[a-f0-9]{64}$/.test(capsule.sha256));
+              assert(Number.isSafeInteger(capsule.bytes) && capsule.bytes > 0 && capsule.bytes <= 32*1024**2);
+              assert.deepEqual(inventory.files['MODEL_BUILD_INPUTS.zip'], {sha256:capsule.sha256, bytes:capsule.bytes});
+              names.push('MODEL_BUILD_INPUTS.zip');
+            }
             assert.deepEqual(Object.keys(inventory.files).sort(), [...names].sort());
             assert.deepEqual(fs.readdirSync(root).sort(), [...names,'publication.json'].sort());
             const files = new Map([['publication.json', inventoryBytes]]);
             let total = inventoryBytes.length;
             for (const name of names) {
               const stat = fs.lstatSync(path.join(root, name)), spec = inventory.files[name];
-              const maximum = name === 'model.lpk' ? 128*1024**2 : name === 'lp-electron.exe' ? 16*1024**2 : name.endsWith('.tar') ? 64*1024**2 : 1024**2;
+              const maximum = name === 'model.lpk' ? 128*1024**2 : name === 'lp-electron.exe' ? 16*1024**2 : name === 'MODEL_BUILD_INPUTS.zip' ? 32*1024**2 : name.endsWith('.tar') ? 64*1024**2 : 1024**2;
               assert(stat.isFile() && stat.size > 0 && stat.size <= maximum && stat.size === spec.bytes);
               assert(/^[a-f0-9]{64}$/.test(spec.sha256));
               const bytes = fs.readFileSync(path.join(root, name)); assert.equal(digest(bytes), spec.sha256);
