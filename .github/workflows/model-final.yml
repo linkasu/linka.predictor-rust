@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Import Book aggregates only; dev/final are legacy and must not be dispatched
+        description: Import Book aggregate reports only; never compute in CI
         required: true
         type: choice
-        options: [import-dev, import-final, dev, final]
+        options: [import-dev, import-final]
         default: import-dev
       source_sha:
         description: Exact reviewed predictor source SHA used by the successful candidate run
@@ -58,22 +58,20 @@ jobs:
             const zlib = require('node:zlib');
             try {
               const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-              if (context.eventName !== 'workflow_dispatch' || process.env.GITHUB_REPOSITORY !== 'linkasu/linka.predictor-rust' || process.env.GITHUB_REF !== 'refs/heads/'+event.repository.default_branch) throw new Error();
+               if (context.eventName !== 'workflow_dispatch' || process.env.GITHUB_REPOSITORY !== 'linkasu/linka.predictor-rust' || process.env.GITHUB_REF !== 'refs/heads/main') throw new Error();
               const input = event.inputs;
               core.setSecret(input.sealed_bundle);
               const names = ['mode','source_sha','app_tooling_sha','candidate_run_id','candidate_artifact_id','candidate_model_sha256','final_seal_sha256','protocol_sha256','run_freeze_sha256','sealed_bundle'];
               if (Object.keys(input).sort().join() !== names.sort().join()) throw new Error();
-              if (!['dev','final','import-dev','import-final'].includes(input.mode)) throw new Error();
-              const importing = input.mode.startsWith('import-');
-              const phase = importing ? input.mode.slice(7) : input.mode;
-              if (!importing) throw new Error('legacy CI inference modes disabled; execute on Book');
+               if (!['import-dev','import-final'].includes(input.mode)) throw new Error();
+               const phase = input.mode.slice(7);
               for (const key of ['source_sha','app_tooling_sha']) if (!/^[a-f0-9]{40}$/.test(input[key])) throw new Error();
               for (const key of ['candidate_model_sha256','final_seal_sha256','protocol_sha256','run_freeze_sha256']) if (!/^[a-f0-9]{64}$/.test(input[key])) throw new Error();
               for (const key of ['candidate_run_id','candidate_artifact_id']) if (!/^[1-9][0-9]{0,15}$/.test(input[key]) || !Number.isSafeInteger(Number(input[key]))) throw new Error();
               if (typeof input.sealed_bundle !== 'string' || input.sealed_bundle.length > 65000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.sealed_bundle)) throw new Error();
               const payload = JSON.parse(zlib.gunzipSync(Buffer.from(input.sealed_bundle,'base64'),{maxOutputLength:2097152}).toString('utf8'));
-              const fields = importing ? ['schema','aggregate_report_json','manifest_json','run_freeze_json','book_receipt_json',...(phase === 'final' ? ['dev_report_json'] : [])] : ['schema','dev_jsonl','manifest_json','run_freeze_json',...(phase === 'final' ? ['final_jsonl','dev_report_json'] : [])];
-              const schema = importing ? 'linka-book-ui-import-v1' : phase === 'dev' ? 'linka-ui-dev-bundle-v1' : 'linka-final-bundle-v1';
+               const fields = ['schema','aggregate_report_json','manifest_json','run_freeze_json','book_receipt_json',...(phase === 'final' ? ['dev_report_json'] : [])];
+               const schema = 'linka-book-ui-import-v1';
               if (Object.keys(payload).sort().join() !== fields.sort().join() || payload.schema !== schema) throw new Error();
               for (const key of fields) if (typeof payload[key] !== 'string' || !payload[key]) throw new Error();
               for (const [key,pin] of [['manifest_json','final_seal_sha256'],['run_freeze_json','run_freeze_sha256']]) if (crypto.createHash('sha256').update(payload[key]).digest('hex') !== input[pin]) throw new Error();
@@ -81,61 +79,53 @@ jobs:
               const {data: run} = await github.rest.actions.getWorkflowRun({...args,run_id:Number(input.candidate_run_id)});
               const {data: candidate_workflow} = await github.rest.actions.getWorkflow({...args,workflow_id:run.workflow_id});
               const {data: artifact} = await github.rest.actions.getArtifact({...args,artifact_id:Number(input.candidate_artifact_id)});
-              if (run.repository.full_name !== 'linkasu/linka.predictor-rust' || run.status !== 'completed' || run.conclusion !== 'success' || run.event !== 'workflow_dispatch' || run.head_sha !== input.source_sha || candidate_workflow.path !== '.github/workflows/model-candidates.yml') throw new Error();
-              if (artifact.expired || artifact.workflow_run.id !== run.id || artifact.workflow_run.head_sha !== input.source_sha || artifact.name !== 'model-candidates-'+run.id+'-'+run.run_attempt || artifact.size_in_bytes <= 0 || artifact.size_in_bytes > 300*1024*1024 || !/^sha256:[a-f0-9]{64}$/.test(artifact.digest)) throw new Error();
+               if (run.repository.full_name !== 'linkasu/linka.predictor-rust' || run.head_repository?.full_name !== 'linkasu/linka.predictor-rust' || run.head_branch !== 'main' || run.status !== 'completed' || run.conclusion !== 'success' || run.event !== 'workflow_dispatch' || run.path !== '.github/workflows/model-candidates.yml' || candidate_workflow.path !== '.github/workflows/model-candidates.yml') throw new Error();
+               if (artifact.expired || artifact.workflow_run.id !== run.id || artifact.workflow_run.head_sha !== run.head_sha || artifact.name !== 'model-candidates-'+run.id+'-'+run.run_attempt || artifact.size_in_bytes <= 0 || artifact.size_in_bytes > 300*1024*1024 || !/^sha256:[a-f0-9]{64}$/.test(artifact.digest)) throw new Error();
               const {data: workflow} = await github.rest.repos.getContent({...args,path:'.github/workflows/model-final.yml',ref:process.env.GITHUB_WORKFLOW_SHA});
               if (!workflow.content || workflow.encoding !== 'base64') throw new Error();
               const executing_workflow_sha256 = crypto.createHash('sha256').update(Buffer.from(workflow.content,'base64')).digest('hex');
               fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'eval-candidate-meta.json'),JSON.stringify({repository:'linkasu/linka.predictor-rust',run,artifact,candidate_workflow,executing_workflow_sha256}),{flag:'wx',mode:0o600});
               const download = await github.rest.actions.downloadArtifact({...args,artifact_id:artifact.id,archive_format:'zip'});
               const bytes = Buffer.from(download.data);
-              if (bytes.length > 300*1024*1024 || 'sha256:'+crypto.createHash('sha256').update(bytes).digest('hex') !== artifact.digest) throw new Error();
+               if (bytes.length !== artifact.size_in_bytes || bytes.length > 300*1024*1024 || 'sha256:'+crypto.createHash('sha256').update(bytes).digest('hex') !== artifact.digest) throw new Error();
               fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'eval-candidate.zip'),bytes,{flag:'wx',mode:0o600});
               core.setOutput('mode',phase);
-              core.setOutput('import_only',String(importing));
             } catch {
-              core.setFailed('FINAL input/provenance validation blocked; no content logged');
+               core.setFailed('FINAL input/provenance validation blocked; no content logged');
             }
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
           path: source
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: linkasu/linka.looks-electron
           ref: ${{ inputs.app_tooling_sha }}
+          fetch-depth: 0
           path: app
           persist-credentials: false
+      - name: Require both selected revisions in their own main history
+        env:
+          MODEL_SOURCE_SHA: ${{ inputs.source_sha }}
+          APP_TOOLING_SHA: ${{ inputs.app_tooling_sha }}
+        run: |
+          git -C source merge-base --is-ancestor "$MODEL_SOURCE_SHA" origin/main
+          git -C app merge-base --is-ancestor "$APP_TOOLING_SHA" origin/main
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.22.2"
       - name: Install locked dev tooling without lifecycle scripts
         working-directory: app
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Synthetic contract checks only
-        if: steps.gate.outputs.import_only == 'false'
-        working-directory: source
-        run: |
-          node --test ../app/scripts/ci/predictor-evaluation*.test.mjs
-          cargo test --locked --no-default-features -p predictor-cli --example model_final_stream
-      - name: Seal, run-freeze, canonical U/T receipts and provenance checks before inference
-        if: steps.gate.outputs.import_only == 'false'
-        run: node app/scripts/ci/predictor-evaluation-runner.mjs preflight "$GITHUB_WORKSPACE/source"
-      - name: Build reviewed raw-response transport only, never train
-        if: steps.gate.outputs.import_only == 'false'
-        working-directory: source
-        run: |
-          RUSTFLAGS="--remap-path-prefix=$PWD=/linka/predictor" CARGO_INCREMENTAL=0 \
-            cargo +1.98.1 build --locked --no-default-features --release -p predictor-cli --example model_final_stream
-      - name: Frozen DEV comparison or owner-frozen FINAL, same real UI_KSR_V1 adapter
-        if: steps.gate.outputs.import_only == 'false'
-        run: node app/scripts/ci/predictor-evaluation-runner.mjs run "$GITHUB_WORKSPACE/source"
+      - name: Bind raw model provenance and tracked import manifest before aggregate intake
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node app/scripts/ci/model-import-origin.cjs "$RUNNER_TEMP/eval-candidate-meta.json" "$RUNNER_TEMP/eval-candidate.zip"
       - name: Synthetic metadata-only Book import guards
-        if: steps.gate.outputs.import_only == 'true'
         run: node --test app/scripts/ci/book-model-evaluation.test.mjs
       - name: Verify immutable Book evidence and wrap aggregate, NO CI build or inference
-        if: steps.gate.outputs.import_only == 'true'
         run: node app/scripts/ci/book-model-evaluation.mjs --import "$GITHUB_WORKSPACE/source"
       - name: Aggregate-only evidence, including NOT QUALIFIED
         if: always() && steps.gate.outcome == 'success'
@@ -146,7 +136,7 @@ jobs:
             ${{ runner.temp }}/${{ steps.gate.outputs.mode }}-aggregate.json
             ${{ runner.temp }}/${{ steps.gate.outputs.mode }}-book-original-aggregate.json
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 90
       - name: Remove only this evaluation's private transport files
         if: always()
         shell: python
