@@ -1,0 +1,17 @@
+{
+  "schema": "linka-model-content-review-v1",
+  "status": "approved-for-filtered-training-only",
+  "execution_context": "book-local-linux-container",
+  "source_sha256": "3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76",
+  "evidence_sha256": "7182bddbe203ba3b2c1c4981f819f460d34cbaa84e716887ebdfa16471d66e93",
+  "exclusions_sha256": "32951b4777e024e4f858134cbeb5cb967f40589fe7de23756379be8d2a3079fa",
+  "source_seal_sha256": "a32897fbb75ad657ec01f9e36a6db55936a69d77f5602bb1eef03dfa719088e4",
+  "preparation_code_sha256": "a7c271b898ff328c7b23bc0fa8fd45e6dd453021aef8677468ec7d9055fc3bd6",
+  "excluded_ids_sha256": "5ebc0e395f8fa8179e5f9113d4293c06f6b6e42f7d635e2711deff775a446c03",
+  "review_run_id": "book:22ff049a5b22412c945d81966af23cf5:1",
+  "review_report_sha256": "1230a531bfaa4a43cf7429ceda4ddf87731cf9c7a3028f5525d0b9cfe5d4a765",
+  "reviewer": "release owner: explicit filtered-source approval and subsequent Book-only execution instruction; operator verified unchanged content",
+  "reference": "provenance/reviews/model-400-book-training-decision.md",
+  "content_reviewed": true,
+  "raw_blob_artifact_approved": false
+}

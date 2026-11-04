@@ -5,7 +5,7 @@ on:
       mode:
         description: Review emits hash/ID-only evidence; train requires separate human approval
         type: choice
-        options: [review, train]
+        options: [review, train, book-import]
         default: review
         required: true
       source_manifest:
@@ -21,13 +21,27 @@ on:
       exclusion_file:
         description: Tracked linka-eval-exclusions-v1 hash-only JSON; never FINAL plaintext
         required: true
+      book_release_id:
+        description: Book import only - unpublished owned draft release ID
+        required: false
+      book_archive_sha256:
+        description: Book import only - exact book-candidates.zip SHA256
+        required: false
+      book_archive_bytes:
+        description: Book import only - exact ZIP bytes, at most 300 MiB
+        required: false
+      app_tooling_sha:
+        description: Book import only - exact trusted app main ancestor SHA
+        required: false
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: predictor-model-training
   cancel-in-progress: false
 jobs:
   candidates:
+    if: inputs.mode != 'book-import' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -43,6 +57,7 @@ jobs:
           path: .local/kenlm-source
           persist-credentials: false
       - name: Synthetic checks only
+        if: inputs.mode != 'book-import'
         run: |
           python3 scripts/model_recipe.py --self-test
           cargo test --locked -p predictor-cli --lib prepare::
@@ -52,6 +67,7 @@ jobs:
         continue-on-error: true
         run: sudo -n apt-get update && sudo -n apt-get install -y cmake libboost-program-options-dev libboost-system-dev libboost-thread-dev zlib1g-dev libbz2-dev liblzma-dev
       - name: Explicitly reviewed source; bounded CPU-only Linux recipe
+        if: inputs.mode != 'book-import'
         env:
           SOURCE_MANIFEST: ${{ inputs.source_manifest }}
           SOURCE_REVIEW: ${{ inputs.source_review }}
@@ -79,7 +95,7 @@ jobs:
             --exclusion-file "$EXCLUSION_FILE" \
             --kenlm-source .local/kenlm-source --output .local/model-400 "${extra[@]}"
       - name: Stop only this run's owned unit if still active
-        if: always()
+        if: always() && inputs.mode != 'book-import'
         run: |
           unit="lp-model-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.service"
           if sudo -n systemctl is-active --quiet "$unit"; then
@@ -106,8 +122,46 @@ jobs:
           assert u['state'] == 'COMPLETED' and u['code'] == 0 and u['child_reaped']
           assert (root / 'bundle/U.lpk').is_file()
           PY
+      - name: Validate trusted app tooling reference
+        if: inputs.mode == 'book-import'
+        env:
+          APP_TOOLING_SHA: ${{ inputs.app_tooling_sha }}
+        run: |
+          [[ "$APP_TOOLING_SHA" =~ ^[0-9a-f]{40}$ ]]
+      - uses: actions/checkout@v4
+        if: inputs.mode == 'book-import'
+        with:
+          repository: linkasu/linka.looks-electron
+          ref: main
+          fetch-depth: 0
+          path: .local/app-tooling
+          persist-credentials: false
+      - name: Select exact app main-history helper
+        if: inputs.mode == 'book-import'
+        env:
+          APP_TOOLING_SHA: ${{ inputs.app_tooling_sha }}
+        run: |
+          git -C .local/app-tooling merge-base --is-ancestor "$APP_TOOLING_SHA" origin/main
+          git -C .local/app-tooling checkout --detach "$APP_TOOLING_SHA"
+      - uses: actions/setup-node@v4
+        if: inputs.mode == 'book-import'
+        with:
+          node-version: '22'
+      - name: Import verified book-local filtered outputs (never CI training)
+        if: inputs.mode == 'book-import'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BOOK_RELEASE_ID: ${{ inputs.book_release_id }}
+          BOOK_ARCHIVE_SHA256: ${{ inputs.book_archive_sha256 }}
+          BOOK_ARCHIVE_BYTES: ${{ inputs.book_archive_bytes }}
+          APP_TOOLING_SHA: ${{ inputs.app_tooling_sha }}
+          SOURCE_MANIFEST: ${{ inputs.source_manifest }}
+          SOURCE_REVIEW: ${{ inputs.source_review }}
+          REVIEW_REPORT: ${{ inputs.review_report }}
+          EXCLUSION_FILE: ${{ inputs.exclusion_file }}
+        run: node .local/app-tooling/scripts/ci/import-book-candidate.cjs
       - name: Candidate artifacts, never a release; optional T failure retains U
-        if: success() && inputs.mode == 'train'
+        if: success() && (inputs.mode == 'train' || inputs.mode == 'book-import')
         uses: actions/upload-artifact@v4
         with:
           name: model-candidates-${{ github.run_id }}-${{ github.run_attempt }}
@@ -134,7 +188,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Sanitized receipts only (no stdout, stderr, raw corpus or SQLite)
-        if: always()
+        if: always() && inputs.mode != 'book-import'
         uses: actions/upload-artifact@v4
         with:
           name: model-receipts-${{ github.run_id }}-${{ github.run_attempt }}

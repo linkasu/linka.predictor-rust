@@ -145,7 +145,157 @@ New code can read old preparation, but old compact-credit builders must not read
 new CC0 reports because they hardcode CC-BY. Immutable code-bound run directories
 are mandatory; LPKv1/runtime state is unchanged.
 
-## Manual CI modes, inputs and artifacts
+## Execution decision: book computation, CI qualification
+
+All real source review, preparation and model training now run only on
+`book.local`, in the `linka-model-400` Colima Linux container. Windows qualification
+stays in CI. The existing CI recipe API/legacy receipts remain compatible; that
+compatibility is **not permission to dispatch CI training**. No macOS host guard
+is removed, no GitHub environment variables are forged, and no production model
+or independent FINAL is approved by this change.
+
+Primary owns SSH, Colima/Docker, dependency/image provisioning, exact image digest,
+runtime execution, receipt/pin collection and actual human source approval. This
+implementation neither installs dependencies nor creates an actual approval.
+
+### Book paths and operational execution receipt
+
+Run from the clean, exact source checkout **`/work/source`**. Source manifest,
+exclusion index, and (for training) approval/review report must be explicit
+repository-relative, tracked regular files without symlinks. Tracked worktree/index
+changes fail. The output is a new absolute worker-local directory **outside** the
+source checkout, without symlink parents; existing output fails, never resumes.
+
+The execution receipt is **not a source file and not Git-tracked**. Primary creates
+it only after the source SHA is known and supplies its independently collected
+full-byte SHA-256 pin. Exact path: **`/work/metadata/execution.json`**, outside the
+source checkout, regular file, mode `0444`, read-only mount, no symlink file/parents,
+at most 64 KiB. No second repository or self-referential metadata commit is needed.
+The operator-provided receipt/pin is the explicit trust boundary: the script does
+not claim to discover the remote Docker image or host identity from inside Linux.
+Receipt bytes must be UTF-8 encoding of
+`json.dumps(receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"`.
+The CLI rejects alternate whitespace, missing newline or CRLF even with a matching
+provided pin. Consumers can remove `kind` and `receipt_sha256` from `execution`,
+serialize the remaining receipt this way and verify its exact SHA-256.
+
+Exact receipt schema (placeholders are **not runnable evidence**):
+
+```json
+{
+  "schema": "linka-book-execution-v1",
+  "host": "book.local",
+  "colima_profile": "linka-model-400",
+  "book_job_id": "<32 lowercase hex>",
+  "attempt": 1,
+  "image_digest": "sha256:<64 lowercase hex>",
+  "source_sha": "<40 lowercase hex: clean source Git HEAD>",
+  "limits": {"memory_bytes": 6442450944, "cpus": 2, "tasks": 128}
+}
+```
+
+Unknown/duplicate keys, bad hashes, nonpositive/noninteger attempt and mismatched
+CLI/receipt/HEAD/cgroup values fail. `memory_bytes` and `tasks` are integers;
+`cpus` is numeric, never boolean. Limits must exactly reflect the finite cgroup
+caps, at most 6 GiB memory, 2 CPUs and 128 tasks; tighter positive caps are allowed
+only with the corresponding exact receipt values. The script reads standard
+`/sys/fs/cgroup/{cgroup.controllers,memory.max,cpu.max,pids.max}`; missing files,
+`max`/unknown caps or an exceeded budget fail without fallback. Primary must expose
+the container's capped cgroup v2 root (private cgroup namespace), disable swap,
+and bound the entire container lifetime to 45 minutes. Child commands share a
+45-minute deadline; downloads retain bounded size and socket timeout. Book also
+sets a 1 GiB per-file limit. Outer Docker cleanup remains primary's responsibility.
+
+### Explicit Book CLI
+
+Run **inside that container**, not on the Mac. Environment placeholders below
+come from primary's actual inputs, not invented values:
+
+```sh
+cd /work/source
+python3 scripts/book_model.py --mode review \
+  --manifest provenance/tatoeba-cc0-candidate.json \
+  --exclusion-file "$TRACKED_EXCLUSIONS" \
+  --runner-receipt /work/metadata/execution.json --receipt-sha256 "$RECEIPT_SHA256" \
+  --job-id "$BOOK_JOB_ID" --attempt "$ATTEMPT" \
+  --image-digest "$IMAGE_DIGEST" --source-sha "$SOURCE_SHA" \
+  --output /work/job/review-output
+
+python3 scripts/book_model.py --mode train \
+  --manifest provenance/tatoeba-cc0-candidate.json \
+  --exclusion-file "$TRACKED_EXCLUSIONS" \
+  --approval "$TRACKED_APPROVAL" --review-report "$TRACKED_REVIEW_REPORT" \
+  --runner-receipt /work/metadata/execution.json --receipt-sha256 "$RECEIPT_SHA256" \
+  --job-id "$BOOK_JOB_ID" --attempt "$ATTEMPT" \
+  --image-digest "$IMAGE_DIGEST" --source-sha "$SOURCE_SHA" \
+  --kenlm-source /work/kenlm-source --output /work/job/train-output
+```
+
+Each execution needs its own explicit job/attempt, receipt/pin and unused output;
+these two examples are separate operator actions, **not an automatic sequence**.
+If the original GET stalls, primary may separately fetch only the pinned source
+into an ephemeral, worker-local read-only cache. Add this optional Book-only flag
+to either command (there is no retry, automatic fallback or resume):
+
+```sh
+--source-cache /work/source-cache/3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76.tsv.bz2
+```
+
+The exact cache filename comes from the tracked manifest's source SHA-256. Before
+computation Book rejects missing, symlinked, writable, nonregular, oversized,
+wrong-size or wrong-hash cache files. The file must have exactly 516148 bytes and
+the original pinned digest. The shared pipeline opens it instead of HTTP and
+reuses its bounded copy and full hash/size check before decoding. Review and
+candidate provenance record `source_transport="verified-worker-local-cache"`;
+the original source URL/profile/license/digest and operational receipt fields are
+unchanged. Cache bytes never become an approved raw archive or CI artifact.
+Failed jobs remain failed and untouched; a new explicit job/output is required.
+
+Book review IDs are `book:<32 lowercase hex>:<positive attempt>`, never GitHub IDs.
+Review rejects approval/training arguments; train requires both tracked inputs.
+`GITHUB_ACTIONS=true` or a non-Linux host fails.
+
+### Approval and acceptance matrix
+
+Book approval uses the same 14 fields documented below, except
+`status="approved-for-filtered-training-only"`, plus the required fifteenth field
+`execution_context="book-local-linux-container"`. The new status also supports
+`execution_context="github-linux"` for API compatibility. Legacy
+`approved-for-ci-training-only` approvals have exactly 14 fields and are accepted
+**only** by the CI context. No approval changes scope implicitly. Book always
+requires `raw_blob_artifact_approved=false`: raw archive creation is forbidden.
+
+The human reviewer must bind actual source/evidence/index/seal/code/report hashes,
+the completed review ID and excluded-ID mapping, including comparison with the
+previously reviewed 63 IDs. The script never generates `content_reviewed=true`.
+Committing approval/report metadata may change HEAD but must not change the
+preparation-code hash; a new operational receipt binds the actual training HEAD.
+Code binding includes `scripts/book_model.py`, the shared recipe, and the current
+contents of `.github/workflows/model-candidates.yml` (including the other owner's
+Book-import changes). After those changes, rerun the actual review before approval.
+
+| Mode/outcome | Accepted behavior |
+| --- | --- |
+| Explicit review | Same pinned source, exclusion filters and Rust preparer; no training, archive or automatic approval |
+| Explicit train | Separately reviewed Book-scoped approval and completed matching review required |
+| U completed, T completed | Canonical unpublished U/T bundle and DEV reports |
+| U completed, ordinary reaped nonzero T failure | U retained, T FAILED, no T model/DEV |
+| Preparation/U failure, signal, cancellation, timeout or unreconciled child | Whole job cannot succeed |
+| Existing output / implicit resume | Rejected; operator must choose a fresh job/output |
+| Raw source archival / corpus stdout or stderr logs | Forbidden on Book; raw/working text remains worker-local |
+
+Both Book modes call the **same** internal Linux orchestrator as the legacy CI
+wrapper: no forked filtering/training implementation. Review JSON and candidate
+provenance carry `execution`: **all exact parsed receipt fields** plus
+`kind="book-local-linux-container"` and `receipt_sha256` (the full-byte pin).
+There is no `context` alias and no claim of CI training. Bundle schema remains
+`linka-model-candidates-v1`, with unchanged canonical filenames and failure rules.
+Book command stdout/stderr is discarded rather than saved as diagnostic corpus
+logs; explicit ARPA/model outputs remain private working files. Only sanitized
+JSON/resource receipts and explicitly selected review/candidate outputs may leave
+the worker through primary's separate import procedure, never the whole job tree.
+
+## Legacy manual CI API, inputs and artifacts (compatibility only)
 
 `model-candidates.yml`: `mode=review|train`, **default review**, `contents: read`,
 no user secrets, push, release or deployment. One non-cancelling concurrency group.
@@ -204,11 +354,31 @@ silent substitution. Archive approval must not authorize private data ingestion.
 
 ## Candidate failure matrix and receipts
 
+`U/T.dev.json` now explicitly records the legacy core phrase-mean diagnostic as
+`NOT_RUN`, with `canonical_ui_dev_required=true`; it contains no invented KSR or
+PASS. The cancelled CI run spent 1346.6 seconds on this noncanonical U diagnostic,
+versus under one minute for preparation/compilation. Canonical UI_KSR_V1 DEV,
+paired U/T selection, owner freeze and independent FINAL remain mandatory and are
+executed separately on Book. Building a candidate is not quality qualification.
+
 The first, still unpublished artifact contract is **`linka-model-candidates-v1`**.
 Canonical names only: `U.lpk`, `T.lpk`, `U.dev.json`, `T.dev.json`,
 `U.receipt.json`, `T.receipt.json`; no legacy filename aliases or migration path.
 DEV reports stay private until their candidate completes. Failed T has neither
 `T.lpk` nor `T.dev.json` in the candidate bundle.
+
+Candidate `attribution.jsonl.bz2` is a strict metadata-only projection, **not** a
+compressed copy of the preparer's full attribution. Only the 13 known CC0 input
+fields are accepted; `family` is replaced with SHA-256 of its exact normalized
+UTF-8 bytes as `family_sha256`. Sentence text and unknown/free-text fields are not
+exported. Decimal sentence IDs, nonnegative integer segment, `train|dev|test`
+split, component SHA, fixed ID-derived HTTPS source URL, pinned source SHA and
+CC0 license/profile/URL are validated; author must be null. `modified` retains
+only a valid `YYYY-MM-DD HH:MM:SS` timestamp or an explicitly unknown empty string
+(`""`), preserved rather than dropped. Other date formats/free text fail closed.
+The original full attribution stays private on the worker; raw cache permissions
+are unchanged. Existing `train.groups.tsv` and `dev.groups.tsv` remain hash-only
+and unchanged. The bundle file map hashes the sanitized compressed credit bytes.
 
 `provenance.json` contains `schema`, `source_revision`, `preparation_code_sha256`,
 `source_sha256`, **`source_manifest_sha256`**, **`exclusions_sha256`** (plural),
@@ -274,6 +444,7 @@ The evaluation owner supplies a new independent FINAL with >=500 groups.
 
 ```sh
 python3 scripts/model_recipe.py --self-test
+python3 -m unittest discover -s scripts -p test_book_model.py
 cargo test --locked -p predictor-cli --lib --test prepare --test budget --test checkpoint
 cargo build --locked -p predictor-cli --example prepare_source --example make_eval_exclusions
 actionlint .github/workflows/model-candidates.yml

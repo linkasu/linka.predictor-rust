@@ -3,11 +3,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: DEV-only UI selection first; FINAL only after owner-frozen DEV report
+        description: Import Book aggregates only; dev/final are legacy and must not be dispatched
         required: true
         type: choice
-        options: [dev, final]
-        default: dev
+        options: [import-dev, import-final, dev, final]
+        default: import-dev
       source_sha:
         description: Exact reviewed predictor source SHA used by the successful candidate run
         required: true
@@ -63,14 +63,18 @@ jobs:
               core.setSecret(input.sealed_bundle);
               const names = ['mode','source_sha','app_tooling_sha','candidate_run_id','candidate_artifact_id','candidate_model_sha256','final_seal_sha256','protocol_sha256','run_freeze_sha256','sealed_bundle'];
               if (Object.keys(input).sort().join() !== names.sort().join()) throw new Error();
-              if (!['dev','final'].includes(input.mode)) throw new Error();
+              if (!['dev','final','import-dev','import-final'].includes(input.mode)) throw new Error();
+              const importing = input.mode.startsWith('import-');
+              const phase = importing ? input.mode.slice(7) : input.mode;
+              if (!importing) throw new Error('legacy CI inference modes disabled; execute on Book');
               for (const key of ['source_sha','app_tooling_sha']) if (!/^[a-f0-9]{40}$/.test(input[key])) throw new Error();
               for (const key of ['candidate_model_sha256','final_seal_sha256','protocol_sha256','run_freeze_sha256']) if (!/^[a-f0-9]{64}$/.test(input[key])) throw new Error();
               for (const key of ['candidate_run_id','candidate_artifact_id']) if (!/^[1-9][0-9]{0,15}$/.test(input[key]) || !Number.isSafeInteger(Number(input[key]))) throw new Error();
               if (typeof input.sealed_bundle !== 'string' || input.sealed_bundle.length > 65000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.sealed_bundle)) throw new Error();
               const payload = JSON.parse(zlib.gunzipSync(Buffer.from(input.sealed_bundle,'base64'),{maxOutputLength:2097152}).toString('utf8'));
-              const fields = ['schema','dev_jsonl','manifest_json','run_freeze_json',...(input.mode === 'final' ? ['final_jsonl','dev_report_json'] : [])];
-              if (Object.keys(payload).sort().join() !== fields.sort().join() || payload.schema !== (input.mode === 'dev' ? 'linka-ui-dev-bundle-v1' : 'linka-final-bundle-v1')) throw new Error();
+              const fields = importing ? ['schema','aggregate_report_json','manifest_json','run_freeze_json','book_receipt_json',...(phase === 'final' ? ['dev_report_json'] : [])] : ['schema','dev_jsonl','manifest_json','run_freeze_json',...(phase === 'final' ? ['final_jsonl','dev_report_json'] : [])];
+              const schema = importing ? 'linka-book-ui-import-v1' : phase === 'dev' ? 'linka-ui-dev-bundle-v1' : 'linka-final-bundle-v1';
+              if (Object.keys(payload).sort().join() !== fields.sort().join() || payload.schema !== schema) throw new Error();
               for (const key of fields) if (typeof payload[key] !== 'string' || !payload[key]) throw new Error();
               for (const [key,pin] of [['manifest_json','final_seal_sha256'],['run_freeze_json','run_freeze_sha256']]) if (crypto.createHash('sha256').update(payload[key]).digest('hex') !== input[pin]) throw new Error();
               const args = context.repo;
@@ -87,7 +91,8 @@ jobs:
               const bytes = Buffer.from(download.data);
               if (bytes.length > 300*1024*1024 || 'sha256:'+crypto.createHash('sha256').update(bytes).digest('hex') !== artifact.digest) throw new Error();
               fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'eval-candidate.zip'),bytes,{flag:'wx',mode:0o600});
-              core.setOutput('mode',input.mode);
+              core.setOutput('mode',phase);
+              core.setOutput('import_only',String(importing));
             } catch {
               core.setFailed('FINAL input/provenance validation blocked; no content logged');
             }
@@ -109,25 +114,37 @@ jobs:
         working-directory: app
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Synthetic contract checks only
+        if: steps.gate.outputs.import_only == 'false'
         working-directory: source
         run: |
           node --test ../app/scripts/ci/predictor-evaluation*.test.mjs
           cargo test --locked --no-default-features -p predictor-cli --example model_final_stream
       - name: Seal, run-freeze, canonical U/T receipts and provenance checks before inference
+        if: steps.gate.outputs.import_only == 'false'
         run: node app/scripts/ci/predictor-evaluation-runner.mjs preflight "$GITHUB_WORKSPACE/source"
       - name: Build reviewed raw-response transport only, never train
+        if: steps.gate.outputs.import_only == 'false'
         working-directory: source
         run: |
           RUSTFLAGS="--remap-path-prefix=$PWD=/linka/predictor" CARGO_INCREMENTAL=0 \
             cargo +1.98.1 build --locked --no-default-features --release -p predictor-cli --example model_final_stream
       - name: Frozen DEV comparison or owner-frozen FINAL, same real UI_KSR_V1 adapter
+        if: steps.gate.outputs.import_only == 'false'
         run: node app/scripts/ci/predictor-evaluation-runner.mjs run "$GITHUB_WORKSPACE/source"
+      - name: Synthetic metadata-only Book import guards
+        if: steps.gate.outputs.import_only == 'true'
+        run: node --test app/scripts/ci/book-model-evaluation.test.mjs
+      - name: Verify immutable Book evidence and wrap aggregate, NO CI build or inference
+        if: steps.gate.outputs.import_only == 'true'
+        run: node app/scripts/ci/book-model-evaluation.mjs --import "$GITHUB_WORKSPACE/source"
       - name: Aggregate-only evidence, including NOT QUALIFIED
         if: always() && steps.gate.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-${{ steps.gate.outputs.mode }}-aggregate-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/${{ steps.gate.outputs.mode }}-aggregate.json
+          path: |
+            ${{ runner.temp }}/${{ steps.gate.outputs.mode }}-aggregate.json
+            ${{ runner.temp }}/${{ steps.gate.outputs.mode }}-book-original-aggregate.json
           if-no-files-found: ignore
           retention-days: 14
       - name: Remove only this evaluation's private transport files
@@ -138,6 +155,7 @@ jobs:
           root=pathlib.Path(os.environ['RUNNER_TEMP'])
           for name in ('eval-candidate-meta.json','eval-candidate.zip'):
               (root/name).unlink(missing_ok=True)
-          for child in root.glob('ui-eval-*'):
-              if child.is_dir() and not child.is_symlink():
-                  shutil.rmtree(child)
+          for pattern in ('ui-eval-*','book-import-origin-*'):
+              for child in root.glob(pattern):
+                  if child.is_dir() and not child.is_symlink():
+                      shutil.rmtree(child)
