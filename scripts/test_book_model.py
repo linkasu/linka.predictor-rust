@@ -1,6 +1,7 @@
 """Synthetic tests only; never downloads or prepares corpus content."""
 
 import os
+import bz2
 import hashlib
 import io
 import json
@@ -16,7 +17,65 @@ import book_model as book
 import model_recipe as recipe
 
 
+def synthetic_credit(family="синтетическая canary sentence never export"):
+    return {"source": "tatoeba", "family": family, "sentence_id": "123", "segment": 0,
+            "author": None, "split": "train", "component": "a" * 64,
+            "source_url": "https://tatoeba.org/en/sentences/show/123", "license": "CC0-1.0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "source_profile": "tatoeba-cc0",
+            "source_sha256": "3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76",
+            "modified": "2026-10-31 00:00:00"}
+
+
 class BookTests(unittest.TestCase):
+    def test_compressed_credits_export_metadata_not_sentence_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original, output = root / "attribution.jsonl", root / "attribution.jsonl.bz2"
+            credit = synthetic_credit()
+            source = {"profile": credit["source_profile"], "sha256": credit["source_sha256"],
+                      "license": credit["license"], "license_url": credit["license_url"]}
+            rows = [credit, {**credit, "modified": "", "split": "test"}]
+            content = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+            original.write_text(content, encoding="utf-8")
+            recipe.export_attribution(original, output, source)
+            with bz2.open(output, "rt", encoding="utf-8") as archive:
+                exported = archive.read()
+            self.assertNotIn(credit["family"], exported)
+            projected = [recipe.parse_json(line) for line in exported.splitlines()]
+            for before, after in zip(rows, projected):
+                self.assertNotIn("family", after)
+                self.assertEqual(after, {**{key: value for key, value in before.items() if key != "family"},
+                    "family_sha256": hashlib.sha256(before["family"].encode("utf-8")).hexdigest()})
+            self.assertEqual(original.read_text(encoding="utf-8"), content)
+
+    def test_credit_export_rejects_free_text_and_invalid_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = root / "attribution.jsonl"
+            credit = synthetic_credit()
+            source = {"profile": credit["source_profile"], "sha256": credit["source_sha256"],
+                      "license": credit["license"], "license_url": credit["license_url"]}
+            invalid_changes = ({"text": "must not export"}, {"family_sha256": "b" * 64},
+                {"family": None}, {"family": ""}, {"author": "a person"}, {"source": "other"},
+                {"source_profile": "tatoeba-ccby"}, {"license": "CC-BY-2.0"},
+                {"license_url": "https://example.invalid/"}, {"source_sha256": "b" * 64},
+                {"source_url": "https://tatoeba.org/en/sentences/show/456"},
+                {"sentence_id": "123 extra text"}, {"sentence_id": 123}, {"segment": True},
+                {"segment": -1}, {"split": "free text"}, {"component": "A" * 64},
+                {"modified": "a sentence"}, {"modified": "2026-02-30 00:00:00"},
+                {"modified": "2026-10-31 00:00:00\ntext"}, {"modified": None})
+            for index, changes in enumerate(invalid_changes):
+                with self.subTest(changes=changes):
+                    original.write_text(json.dumps({**credit, **changes}) + "\n", encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        recipe.export_attribution(original, root / f"bad-{index}.bz2", source)
+            for index, changes in enumerate(({"profile": "tatoeba-ccby"}, {"license": "other"},
+                                              {"license_url": "https://example.invalid/"})):
+                original.write_text(json.dumps(credit) + "\n", encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    recipe.export_attribution(original, root / f"bad-source-{index}.bz2", {**source, **changes})
+
     def test_worker_local_cache_requires_exact_safe_verified_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -401,7 +460,7 @@ class BookTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             source = {"profile": "tatoeba-cc0", "bytes": 516148,
-                      "license": "synthetic-test-only", "license_url": "https://example.invalid/",
+                      "license": "CC0-1.0", "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
                       "sha256": "3b6645bbc18e4e3444ebc9195c4a6c41ff521a8bc4306fec8fcc217ae734db76",
                       "url": "https://downloads.tatoeba.org/exports/per_language/rus/rus_sentences_CC0.tsv.bz2"}
             manifest, exclusions = root / "manifest.json", root / "index.json"
@@ -427,7 +486,8 @@ class BookTests(unittest.TestCase):
                     if args.mode == "train":
                         for name, content in {"train.txt": "synthetic\n", "frequencies.tsv": "synthetic\t1\n",
                                               "train.groups.tsv": "synthetic\n", "dev.groups.tsv": "synthetic\n",
-                                              "dev.txt": "synthetic\n", "attribution.jsonl": "{}\n"}.items():
+                                              "dev.txt": "synthetic\n",
+                                              "attribution.jsonl": json.dumps(synthetic_credit("synthetic")) + "\n"}.items():
                             (prepared / name).write_text(content)
                 elif name == "compile-U":
                     (args.output / "private/U.lpk").write_bytes(b"synthetic-model-only")
@@ -487,6 +547,12 @@ class BookTests(unittest.TestCase):
             self.assertTrue((args.output / "bundle/U.lpk").is_file())
             self.assertFalse((args.output / "bundle/T.lpk").exists())
             self.assertFalse((args.output / "approved-source").exists())
+            with bz2.open(args.output / "bundle/attribution.jsonl.bz2", "rt", encoding="utf-8") as archive:
+                exported_credit = recipe.parse_json(archive.readline())
+            self.assertNotIn("family", exported_credit)
+            self.assertEqual(exported_credit["family_sha256"], hashlib.sha256(b"synthetic").hexdigest())
+            self.assertEqual(provenance["files_sha256"]["attribution.jsonl.bz2"],
+                             original_digest(args.output / "bundle/attribution.jsonl.bz2"))
 
     def test_host_guard(self):
         with patch.object(book.platform, "system", return_value="Darwin"):

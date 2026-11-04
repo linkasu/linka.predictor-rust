@@ -3,6 +3,7 @@
 import argparse
 import bz2
 from collections import Counter
+from datetime import datetime
 import hashlib
 import json
 import math
@@ -163,6 +164,41 @@ def archive_approved_source(raw, archive, approved, binding):
     archive.mkdir()
     shutil.copyfile(raw, archive / "source.tsv.bz2")
     write_json(archive / "approval-binding.json", binding)
+
+
+def export_attribution(original, archive, source):
+    fields = {"source", "family", "sentence_id", "segment", "author", "split", "component",
+              "source_url", "license", "license_url", "source_profile", "source_sha256", "modified"}
+    license_url = "https://creativecommons.org/publicdomain/zero/1.0/"
+    if (source.get("profile") != "tatoeba-cc0" or source.get("license") != "CC0-1.0"
+            or source.get("license_url") != license_url
+            or not isinstance(source.get("sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", source["sha256"]) is None):
+        raise ValueError("credit export requires the pinned CC0 source metadata")
+    with original.open(encoding="utf-8") as audit, bz2.open(archive, "xt", encoding="utf-8") as credits:
+        for line in audit:
+            credit = parse_json(line)
+            if (not isinstance(credit, dict) or set(credit) != fields
+                    or credit["source"] != "tatoeba" or credit["source_profile"] != "tatoeba-cc0"
+                    or credit["license"] != "CC0-1.0" or credit["license_url"] != license_url
+                    or credit["source_sha256"] != source["sha256"] or credit["author"] is not None
+                    or not isinstance(credit["family"], str) or not credit["family"]
+                    or not isinstance(credit["sentence_id"], str)
+                    or re.fullmatch(r"[0-9]+", credit["sentence_id"]) is None
+                    or credit["source_url"] != f"https://tatoeba.org/en/sentences/show/{credit['sentence_id']}"
+                    or type(credit["segment"]) is not int or credit["segment"] < 0
+                    or credit["split"] not in ("train", "dev", "test")
+                    or not isinstance(credit["component"], str)
+                    or re.fullmatch(r"[0-9a-f]{64}", credit["component"]) is None
+                    or not isinstance(credit["modified"], str)):
+                raise ValueError("invalid metadata-only CC0 credit record")
+            if credit["modified"]:
+                if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}", credit["modified"]) is None:
+                    raise ValueError("credit modified timestamp must be empty or YYYY-MM-DD HH:MM:SS")
+                datetime.strptime(credit["modified"], "%Y-%m-%d %H:%M:%S")
+            family = credit.pop("family")
+            credit["family_sha256"] = hashlib.sha256(family.encode("utf-8")).hexdigest()
+            credits.write(json.dumps(credit, ensure_ascii=True) + "\n")
 
 
 def defer_core_dev(output):
@@ -440,9 +476,7 @@ def _linux_recipe(args, run_id, execution=None, source_cache=None):
                 shutil.copyfile(private / "T.dev.json", bundle / "T.dev.json")
             for name in ("report.json", "frequencies.tsv", "train.groups.tsv", "dev.groups.tsv"):
                 shutil.copyfile(prepared / name, bundle / name)
-            with (prepared / "attribution.jsonl").open("rb") as audit:
-                with bz2.open(bundle / "attribution.jsonl.bz2", "xb") as credits:
-                    shutil.copyfileobj(audit, credits, 65536)
+            export_attribution(prepared / "attribution.jsonl", bundle / "attribution.jsonl.bz2", source)
             for original, name in ((args.manifest, "source-manifest.json"), (args.approval, "source-review.json"),
                                    (args.review_report, "review-report.json"),
                                    (Path("provenance/licenses/KenLM-LICENSE"), "KenLM-LICENSE")):
@@ -450,6 +484,7 @@ def _linux_recipe(args, run_id, execution=None, source_cache=None):
             (bundle / "NOTICES.txt").write_text(
                 f"Tatoeba Russian public sentence examples: {source['license']}\n{source['url']}\n{source['license_url']}\n"
                 "Original IDs and available modified dates are retained in attribution.jsonl.bz2; absent CC0 authors are null.\n"
+                "Credits contain normalized family SHA-256, not source sentence text; empty modified dates remain empty.\n"
                 "Modified: NFC/lowercase, segmentation, grouped deduplication, fixed hash/shingle and direct-identifier exclusions, "
                 "train-only counts, required count unigram and optional external MKN3. No discount fallback.\n"
                 "Candidate only; no redistribution, resource, AAC or FINAL approval.\n", encoding="utf-8")

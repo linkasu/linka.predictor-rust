@@ -367,6 +367,19 @@ Canonical names only: `U.lpk`, `T.lpk`, `U.dev.json`, `T.dev.json`,
 DEV reports stay private until their candidate completes. Failed T has neither
 `T.lpk` nor `T.dev.json` in the candidate bundle.
 
+Candidate `attribution.jsonl.bz2` is a strict metadata-only projection, **not** a
+compressed copy of the preparer's full attribution. Only the 13 known CC0 input
+fields are accepted; `family` is replaced with SHA-256 of its exact normalized
+UTF-8 bytes as `family_sha256`. Sentence text and unknown/free-text fields are not
+exported. Decimal sentence IDs, nonnegative integer segment, `train|dev|test`
+split, component SHA, fixed ID-derived HTTPS source URL, pinned source SHA and
+CC0 license/profile/URL are validated; author must be null. `modified` retains
+only a valid `YYYY-MM-DD HH:MM:SS` timestamp or an explicitly unknown empty string
+(`""`), preserved rather than dropped. Other date formats/free text fail closed.
+The original full attribution stays private on the worker; raw cache permissions
+are unchanged. Existing `train.groups.tsv` and `dev.groups.tsv` remain hash-only
+and unchanged. The bundle file map hashes the sanitized compressed credit bytes.
+
 `provenance.json` contains `schema`, `source_revision`, `preparation_code_sha256`,
 `source_sha256`, **`source_manifest_sha256`**, **`exclusions_sha256`** (plural),
 `review_run_id`, `train_sha256`, `frequencies_sha256`, `lp_sha256`, `tool_versions`,
